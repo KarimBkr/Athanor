@@ -3,6 +3,8 @@
 
 const CSRF = document.querySelector('meta[name="csrf"]').content;
 const $ = (s, r = document) => r.querySelector(s);
+// the app only listens on this computer: the browser showing it runs on the same system as the pilots
+const MAC = /Mac/.test(navigator.platform || navigator.userAgent || "");
 const h = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // pilot phase (STATE.json) -> status dot class
 const classePhase = (x) => !x || !x.actif ? "" : ({ travail: "travaille", quota: "quota", attente_vous: "quota", erreur: "erreur", connexion: "erreur", entre_cycles: "entre_cycles" }[x.phase] || "travaille");
@@ -851,7 +853,7 @@ function rendreGuide(v) {
   const e1 = v.kit_installe, e2 = !!v.projet, e3 = e2 && !v.demande_vide;
   return `<div class="bloc"><h2>${t("First steps")}</h2><p class="intro">${t("Five steps, all from this window. Then you can let it run for days, on several projects at once.")}</p>
   <div class="etapes">
-    <div class="etape ${e1 ? "faite" : ""}"><div class="n">1</div><div><b>${t("Install the tooling")}</b><div class="d">${t("WSL2 (the Linux built into Windows), Claude Code, the system sandbox. A window opens; Linux asks for a password once.")}</div></div>
+    <div class="etape ${e1 ? "faite" : ""}"><div class="n">1</div><div><b>${t("Install the tooling")}</b><div class="d">${MAC ? t("Homebrew's tools and Claude Code. A Terminal window opens; macOS may ask for your password once.") : t("WSL2 (the Linux built into Windows), Claude Code, the system sandbox. A window opens; Linux asks for a password once.")}</div></div>
       <button class="btn ${e1 ? "" : "btn-primaire"}" data-installer>${e1 ? t("Run again") : t("Install")}</button></div>
     <div class="etape"><div class="n">2</div><div><b>${t("Check and connect")}</b><div class="d">${t("Checks all the tooling and the token of your Claude subscription. Every problem has its own “Repair” or “Ask Claude” button.")}</div></div>
       <a class="btn" href="#sante">${t("Open the check")}</a></div>
@@ -1010,7 +1012,7 @@ const LIBELLES_GH = { ok: "Last push", bloque: "Push blocked", rejete: "Push ref
 function rendreGitHub(r) {
   if (r.erreur) return `<h2>GitHub</h2><p class="bloque petit">${h(r.erreur)}</p><button class="btn btn-petit" data-gh="actualiser">${t("Refresh")}</button>`;
   const g = r.github || {}, d = g.dernier;
-  const manque = !g.gh || !g.ssh ? `<p class="attention petit">${t("The GitHub CLI or OpenSSH is missing in Linux: open the check and repair “Basic Linux packages”.")} <a href="#sante">${t("Open the check")}</a></p>` : "";
+  const manque = !g.gh || !g.ssh ? `<p class="attention petit">${MAC ? t("The GitHub CLI or OpenSSH is missing: open the check and repair “Basic tools”.") : t("The GitHub CLI or OpenSSH is missing in Linux: open the check and repair “Basic Linux packages”.")} <a href="#sante">${t("Open the check")}</a></p>` : "";
   if (!g.lie) return `<h2>GitHub</h2>
     <p class="muet petit">${t("Send the project's commits to one of your GitHub repositories, by itself after each milestone.")}</p>${manque}
     ${choixGitHub("gh", r.nom_propose || "")}
@@ -1899,8 +1901,8 @@ async function rendreOptions() {
       </div>
       <div class="bloc"><h2>${t("Startup")}</h2>
         <label class="interrupteur"><input type="checkbox" id="op-lancer" data-option ${o.lancer_pilote_au_demarrage ? "checked" : ""}><span>${t("Restart the pilots that were running, when the app opens")}</span></label>
-        <label class="interrupteur"><input type="checkbox" id="op-windows" data-option ${o.demarrage_windows ? "checked" : ""}><span>${t("Open Athanor when the computer starts (Windows, or your Linux desktop session)")}</span></label>
-        <p class="muet petit">${t("Pilots run in WSL in the background, without a window. Remember to disable the PC's sleep mode.")}</p>
+        <label class="interrupteur"><input type="checkbox" id="op-windows" data-option ${o.demarrage_windows ? "checked" : ""}><span>${MAC ? t("Open Athanor when you log in to the Mac") : t("Open Athanor when the computer starts (Windows, or your Linux desktop session)")}</span></label>
+        <p class="muet petit">${MAC ? t("Pilots run in the background, without a window; the Mac does not go to sleep while one runs.") : t("Pilots run in WSL in the background, without a window. Remember to disable the PC's sleep mode.")}</p>
         ${o.windows ? `<label class="interrupteur"><input type="checkbox" id="op-barre" data-option ${o.barre_windows ? "checked" : ""}><span>${t("Windows' own title bar instead of Athanor's (when Athanor opens again)")}</span></label>` : ""}
       </div>
       <div class="bloc"><h2>${t("Lock")}</h2>
@@ -1918,15 +1920,15 @@ async function rendreOptions() {
       <div class="bloc"${b.message === "Virtual desktop: Windows only." ? " hidden" : ""}><h2>${t("“Claude” desktop")}</h2>
         <label class="interrupteur"><input type="checkbox" id="op-bureau" data-option ${o.bureau_virtuel ? "checked" : ""}><span>${t("Open the programs Claude starts (Unreal, Blender, a game under test) on a desktop of their own")}</span></label>
         <p class="petit ${b.disponible ? "ok" : "attention"}">${h(t(b.message || ""))}</p>
-        ${b.ecran ? `<p class="muet petit">${t("The Linux windows Claude opens (a game under test, Godot, a browser) go to a private screen: never on yours, never taking the focus.")}</p>
+        ${MAC ? "" : b.ecran ? `<p class="muet petit">${t("The Linux windows Claude opens (a game under test, Godot, a browser) go to a private screen: never on yours, never taking the focus.")}</p>
         <div class="ligne"><button class="btn btn-petit" data-ecran>${t("View Claude's screen")}</button></div>`
         : b.isole ? `<p class="muet petit">${t("They never show on your screen and never take the focus: a full-screen game is not interrupted. On Claude's desktop, the bar at the top (or Ctrl + Alt + B) brings you back.")}</p>
         ${!o.bureau_virtuel && b.restantes ? `<p class="petit attention">${t("{0} window(s) still open on Claude's desktop: close them there, they will then open on your screen.", [b.restantes])}</p>` : ""}
         <div class="ligne"><button class="btn btn-petit" data-bureau="voir" ${b.disponible ? "" : "disabled"}>${t("View Claude's desktop")}</button><button class="btn btn-petit" data-ecran title="${h(t("The Linux windows Claude opens (a game under test, Godot, a browser) go to a private screen: never on yours, never taking the focus."))}">${t("Claude's Linux screen")}</button></div>`
         : `<div class="ligne"><button class="btn btn-petit" data-bureau="voir" ${b.disponible ? "" : "disabled"}>${t("View Claude's desktop")}</button><button class="btn btn-petit" data-bureau="revenir" ${b.disponible ? "" : "disabled"}>${t("Come back")}</button><button class="btn btn-petit" data-bureau="ramener" ${b.disponible ? "" : "disabled"}>${t("Bring the windows back here")}</button><span class="muet petit">${t("{0} window(s) moved", [b.deplacees || 0])}</span></div>
         ${(b.vues || []).length ? `<ul class="muet petit mt-1">${b.vues.slice(0, 10).map((f) => `<li>${h(f)}</li>`).join("")}</ul>` : ""}`}
-        <label class="champ mt-2"${b.isole || b.ecran ? " hidden" : ""}><span>${t("Recognized: programs inside the projects and in tools\\, “Athanor” windows, and these executables (one per line)")}</span><textarea id="op-programmes" data-option class="code" rows="5">${h(o.programmes_supplementaires)}</textarea></label>
-        <p class="muet petit"${b.isole || b.ecran ? " hidden" : ""}>${t("Windows shortcut to switch desktops: Ctrl + Win + ← / →.")}</p>
+        <label class="champ mt-2"${b.isole || b.ecran || MAC ? " hidden" : ""}><span>${t("Recognized: programs inside the projects and in tools\\, “Athanor” windows, and these executables (one per line)")}</span><textarea id="op-programmes" data-option class="code" rows="5">${h(o.programmes_supplementaires)}</textarea></label>
+        <p class="muet petit"${b.isole || b.ecran || MAC ? " hidden" : ""}>${t("Windows shortcut to switch desktops: Ctrl + Win + ← / →.")}</p>
       </div>
       <div class="bloc"${o.windows ? "" : " hidden"}><h2>${t("Execution mode")}</h2>
         <label class="interrupteur"><input type="checkbox" id="op-natif" data-option ${o.mode_natif ? "checked" : ""}><span>${t("Native Windows (experimental): the pilot runs in Git Bash and Claude Code is the Windows program, without WSL")}</span></label>

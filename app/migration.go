@@ -18,11 +18,11 @@ const (
 
 // migrerConfig renames autopilote-config.json (next to the exe) to athanor-config.json.
 func migrerConfig() {
-	exe, err := os.Executable()
+	d, err := dossierExe()
 	if err != nil {
 		return
 	}
-	ancien := filepath.Join(filepath.Dir(exe), ancienConfig)
+	ancien := filepath.Join(d, ancienConfig)
 	if _, err := os.Stat(cheminConfig()); err == nil {
 		return
 	}

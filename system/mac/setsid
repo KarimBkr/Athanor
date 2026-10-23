@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# macOS: no setsid program. The command runs as the leader of a new session (os.setsid), so that the
+# pilot stops it, and every program it started, with pkill -s (system/mac/pkill). The forms the scripts
+# use: setsid [-f] [-w] PROGRAM ARGS... (-f: always in a new process, the caller does not wait).
+fourche=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -f|--fork) fourche=1; shift ;;
+    -w|--wait) shift ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+[ $# -gt 0 ] || { echo "usage: setsid [-f] PROGRAM [ARGS...]" >&2; exit 1; }
+exec python3 -I -c '
+import os, sys
+fourche, args = sys.argv[1] == "1", sys.argv[2:]
+# a process group leader cannot start a session: like the real setsid, a new process does it then
+if fourche or os.getpgrp() == os.getpid():
+    if os.fork() > 0:
+        os._exit(0)
+os.setsid()
+try:
+    os.execvp(args[0], args)
+except OSError as e:
+    print("setsid: %s: %s" % (args[0], e.strerror), file=sys.stderr)
+    os._exit(127)
+' "$fourche" "$@"

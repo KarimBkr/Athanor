@@ -223,6 +223,23 @@ def serveur(kit, sid, definition, secrets, dossier, principal):
             if manquants:
                 return None, "missing key " + ", ".join(sorted(manquants))
             return s, ""
+        if sys.platform == "darwin":
+            # macOS: a program of the Mac itself, started outside the cage as the Windows ones are. Roblox
+            # Studio's server is StudioMCP, inside the app (Roblox's documentation): its Windows launcher
+            # (cmd.exe /c …\mcp.bat) is read as that one
+            args = [remplacer(str(a), secrets, dossier, manquants) for a in (c.get("args") or [])]
+            commande = remplacer(cmd, secrets, dossier, manquants)
+            if os.path.basename(commande).lower() in ("cmd", "cmd.exe") and any("mcp.bat" in a.lower() for a in args):
+                commande, args = studio_mcp_mac(kit), []
+            if commande.lower().endswith((".exe", ".bat", ".cmd")) or os.path.basename(commande).lower() in ("cmd", "powershell"):
+                return None, "Windows program: not available on macOS"
+            s = {"type": "stdio", "command": commande, "args": args}
+            env = facultatif(c.get("env"))
+            if env:
+                s["env"] = env
+            if manquants:
+                return None, "missing key " + ", ".join(sorted(manquants))
+            return s, ""
         if not interop_windows():
             return None, "Windows program: Windows is not reachable from here"
         dossier_w = chemin_windows(dossier)   # {PROJECT} as the Windows program knows it (C:\…)
@@ -273,6 +290,19 @@ class Lecteur:
             return self.q.get(timeout=max(0, delai))
         except queue.Empty:
             return None
+
+
+def studio_mcp_mac(kit):
+    """macOS: Roblox Studio's MCP server, in the app system/detect-tools.sh found (else /Applications)."""
+    app = "/Applications/RobloxStudio.app"
+    try:
+        for ligne in open(os.path.join(kit, "system", "pc_tools.env"), encoding="utf-8"):
+            cle, _, val = ligne.strip().partition("=")
+            if cle == "ROBLOX_STUDIO" and val.strip("'"):
+                app = val.strip("'")
+    except OSError:
+        pass
+    return os.path.join(app, "Contents", "MacOS", "StudioMCP")
 
 
 def interop_windows():

@@ -1,0 +1,38 @@
+#!/bin/bash -p
+# Athanor's administrator helper on macOS, the counterpart of the Windows task "Athanor - installations".
+# Installed once by commands/allow-admin-mac.sh into /Library/Athanor (owned by root, nobody else can change
+# it), with a sudo rule for this program alone: the gateways run it without a password prompt.
+# It only does two things, on files located in the folders allowed when it was installed
+# (/Library/Athanor/racines: the kit's tools/mac and the user's home):
+#   athanor-admin pkg PATH.pkg       installs a package (installer -pkg … -target /)
+#   athanor-admin firewall PATH      lets an app or program receive connections (application firewall)
+# (Runs as root with the Bash of macOS, 3.2: nothing newer is used.)
+set -u
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+umask 022
+action="${1:-}"; cible="${2:-}"
+[ -n "$cible" ] || { echo "usage: athanor-admin pkg PATH.pkg | firewall PATH" >&2; exit 2; }
+reel=$(/usr/bin/python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$cible" 2>/dev/null) || exit 2
+dedans=0
+while IFS= read -r r; do
+  [ -n "$r" ] || continue
+  case "$reel" in "$r"/*) dedans=1 ;; esac
+done < /Library/Athanor/racines
+[ "$dedans" = 1 ] || { echo "athanor-admin: refused, outside the allowed folders: $reel" >&2; exit 2; }
+case "$action" in
+  pkg)
+    case "$reel" in *.pkg|*.PKG) ;; *) echo "athanor-admin: a .pkg installer only." >&2; exit 2 ;; esac
+    [ -f "$reel" ] && [ ! -L "$cible" ] || { echo "athanor-admin: not a file: $reel" >&2; exit 2; }
+    # installed from a copy root owns: the user's file cannot be swapped between the check and the install
+    d=$(mktemp -d /private/var/tmp/athanor-admin.XXXXXX) || exit 1
+    trap 'rm -rf "$d"' EXIT
+    cp "$reel" "$d/paquet.pkg" || exit 1
+    installer -pkg "$d/paquet.pkg" -target /
+    ;;
+  firewall)
+    [ -e "$reel" ] || { echo "athanor-admin: not found: $reel" >&2; exit 2; }
+    fw=/usr/libexec/ApplicationFirewall/socketfilterfw
+    "$fw" --add "$reel" >/dev/null && "$fw" --unblockapp "$reel"
+    ;;
+  *) echo "athanor-admin: unknown action: $action" >&2; exit 2 ;;
+esac

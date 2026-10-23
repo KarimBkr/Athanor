@@ -69,7 +69,7 @@ except OSError:
 # Gateways to the PC tools and Docker: they leave the sandbox, so they live
 # in system/ (not modifiable by Claude) and must be allowed one by one.
 passerelles = ["tool", "unreal-editor", "unreal-cmd", "unreal-uat", "blender", "roblox-studio",
-               "install-windows", "pc-exec", "windows-var", "adb"]
+               "install-windows", "pc-exec", "windows-var", "adb", "install-mac", "mac-var"]
 
 reglages = {
     "language": "english",
@@ -103,7 +103,8 @@ reglages = {
         "excludedCommands": [f"{p} *" for p in passerelles],
         "filesystem": {
             "allowWrite": [tools],
-            "denyRead": ["~/", "/mnt"],
+            # macOS (Seatbelt): the other drives are under /Volumes, the other accounts under /Users
+            "denyRead": ["~/", "/Volumes", "/Users"] if sys.platform == "darwin" else ["~/", "/mnt"],
             "allowRead": projets + [tools] + lectures + logiciels,   # system, skills: read-only
         },
         "network": {"allowedDomains": ["*"]},

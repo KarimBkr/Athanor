@@ -194,6 +194,14 @@ func (s *Serveur) apiBarriere(w http.ResponseWriter, r *http.Request) {
 
 func (s *Serveur) apiInstaller(w http.ResponseWriter, r *http.Request) {
 	script := `commands\install.ps1`
+	if runtime.GOOS == "darwin" { // macOS: Homebrew's tools, in a Terminal window (the password may be asked)
+		if err := FenetreWSL(s.kitCourant(), "Installation", "bash commands/install-mac.sh"); err != nil {
+			s.erreur(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.msg(w, "Installer opened in a window. When it is done, come back here and run “Check everything”.")
+		return
+	}
 	if modeNatif.Load() {
 		script = `commands\install-natif.ps1` // native Windows: Git for Windows, jq, Python, Claude Code for Windows
 	}

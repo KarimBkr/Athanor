@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +60,9 @@ if printf '%s' "$sortie" | grep -q TOKEN_OK; then echo 'Connection OK'; else ech
 var reparationJeton = Reparation{Genre: "fenetre", Titre: "Get a token", Script: `export PATH="$HOME/.local/bin:$PATH"; claude setup-token`, Explication: "Opens a window: sign in in the browser, then paste the token shown into Settings → CLAUDE_CODE_OAUTH_TOKEN."}
 
 func Verifications() []*Verif {
+	if runtime.GOOS == "darwin" {
+		return verificationsMac()
+	}
 	v := func(id, titre, explication, script string, facultatif bool, rep Reparation) *Verif {
 		return &Verif{ID: id, Titre: titre, Explication: explication, Script: script, Facultatif: facultatif, Reparation: rep, tache: NouvelleTache("verif-"+id, titre)}
 	}
@@ -96,6 +100,50 @@ python3 -m py_compile system/*.py || { echo 'Python ERROR'; exit 1; }
 if grep -lq $'\r' system/pilot.sh commands/*.sh 2>/dev/null; then echo 'ERROR: Windows line endings (CRLF) in a script'; exit 1; fi
 echo 'scripts OK'`, false,
 			Reparation{Genre: "wsl", Script: `chmod +x commands/*.sh system/*.sh system/bin/* ; echo 'permissions restored'`}),
+	}
+}
+
+// verificationsMac: the checks on macOS, where the pilot runs on the Mac itself (Homebrew's tools,
+// Claude Code's own sandbox: Seatbelt).
+func verificationsMac() []*Verif {
+	v := func(id, titre, explication, script string, facultatif bool, rep Reparation) *Verif {
+		return &Verif{ID: id, Titre: titre, Explication: explication, Script: script, Facultatif: facultatif, Reparation: rep, tache: NouvelleTache("verif-"+id, titre)}
+	}
+	installer := Reparation{Genre: "fenetre", Titre: "Installation", Script: "bash commands/install-mac.sh", Explication: "Opens a Terminal window: Homebrew installs the missing tools (your password may be asked once)."}
+	return []*Verif{
+		v("systeme", "macOS and Homebrew", "The pilot runs on the Mac itself, with the tools of Homebrew (brew.sh).",
+			`echo "macOS $(sw_vers -productVersion) ($(uname -m))"; command -v brew >/dev/null && echo "Homebrew $(brew --version | head -n 1 | cut -d' ' -f2)" || { echo 'Homebrew MISSING'; exit 1; }`, false,
+			Reparation{Genre: "fenetre", Titre: "Homebrew", Script: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && bash commands/install-mac.sh`, Explication: "Opens a Terminal window: Homebrew's installer asks for your password, then Athanor's installation runs."}),
+		v("internet", "Internet", "Claude must reach claude.ai.",
+			`curl -s -o /dev/null -m 10 -w 'claude.ai reachable (code %{http_code})
+' https://claude.ai/ || { echo 'claude.ai UNREACHABLE'; exit 1; }`, false, Reparation{Genre: "aucune"}),
+		v("paquets", "Basic tools", "Bash 4 or later, the GNU tools (coreutils, findutils, sed), flock, git, jq, curl, python3, node, npm, ripgrep, ImageMagick, ffmpeg, zip, ssh and the GitHub CLI (GitHub push).",
+			`m=0; [ "${BASH_VERSINFO[0]}" -ge 4 ] && echo "ok  bash $BASH_VERSION" || { echo "MISSING bash 4 or later (this one: $BASH_VERSION)"; m=1; }
+for p in gstat gsed gfind flock git jq curl python3 node npm rg magick ffmpeg zip ssh gh; do if command -v $p >/dev/null 2>&1; then echo "ok  $p"; else echo "MISSING $p"; m=1; fi; done; exit $m`, false, installer),
+		v("barriere", "System sandbox", "Claude Code's sandbox on macOS (Seatbelt) keeps Claude inside the project. Without it, the pilot refuses to start. The sandbox test proves it with a real session.",
+			`sandbox-exec -p '(version 1)(allow default)' /usr/bin/true && echo 'Seatbelt OK' || { echo 'Seatbelt UNAVAILABLE'; exit 1; }`, false, Reparation{Genre: "aucune"}),
+		v("claude", "Claude Code", "The claude program (~/.local/bin).",
+			`export PATH="$HOME/.local/bin:$PATH"; claude --version`, false,
+			Reparation{Genre: "wsl", Script: `curl -fsSL https://claude.ai/install.sh | bash`}),
+		v("jeton", "Token and model access", "The token of your subscription (CLAUDE_CODE_OAUTH_TOKEN in .env) is accepted: a tiny Haiku session answers.",
+			scriptJeton, false, reparationJeton),
+		v("rtk", "RTK, output compression", "Optional: reduces what Claude reads for git, ls, grep…",
+			`test -x system/bin/rtk && system/bin/rtk --version`, true,
+			Reparation{Genre: "wsl", Script: `cd system/bin && curl -fsSL "https://github.com/rtk-ai/rtk/releases/download/v0.50.0/rtk-$(uname -m | sed 's/arm64/aarch64/')-apple-darwin.tar.gz" | tar -xz rtk && chmod +x rtk && ./rtk --version`}),
+		v("outils_pc", "Mac software detected", "Unreal, Blender, Roblox Studio, Android SDK, Docker… found on this Mac and made available to Claude (read-only).",
+			`export PROJECT="$PWD/logs/detection"; mkdir -p "$PROJECT" tools; bash system/detect-tools.sh >/dev/null 2>&1; sed -n '3,25p' "$PROJECT/.athanor/PC_TOOLS.md"`, true, Reparation{Genre: "aucune"}),
+		v("docker", "Docker", "Optional: disposable images for Claude (tool IMAGE COMMAND). Start Docker Desktop.",
+			`docker info >/dev/null 2>&1 && echo 'Docker reachable' || { echo 'Docker UNREACHABLE (optional)'; exit 1; }`, true, Reparation{Genre: "aucune"}),
+		v("admin", "Administrator rights for installations", "A sudo rule for Athanor's helper alone, so that Claude installs .pkg installers and sets the firewall without asking your password.",
+			`sudo -n -l /Library/Athanor/athanor-admin >/dev/null 2>&1 && echo 'Helper allowed' || { echo 'Helper ABSENT: Claude can only install with Homebrew and portable apps'; exit 1; }`, true,
+			Reparation{Genre: "fenetre", Titre: "Administrator rights", Script: "bash commands/allow-admin-mac.sh", Explication: "Opens a Terminal window: macOS asks for your password once. Afterwards Claude installs .pkg installers without ever prompting you."}),
+		v("outils_kit", "Tool scripts", "The gateways (pc-exec, unreal-cmd, blender, tool…) and the pilot scripts are executable and consistent.",
+			`chmod +x commands/*.sh system/*.sh system/bin/* system/mac/* 2>/dev/null
+for f in system/pilot.sh commands/*.sh; do bash -n "$f" || { echo "Syntax ERROR: $f"; exit 1; }; done
+python3 -m py_compile system/*.py || { echo 'Python ERROR'; exit 1; }
+if grep -lq $'\r' system/pilot.sh commands/*.sh 2>/dev/null; then echo 'ERROR: Windows line endings (CRLF) in a script'; exit 1; fi
+echo 'scripts OK'`, false,
+			Reparation{Genre: "wsl", Script: `chmod +x commands/*.sh system/*.sh system/bin/* system/mac/* ; echo 'permissions restored'`}),
 	}
 }
 
@@ -172,7 +220,7 @@ func (v *Verif) DemanderAClaude(k Kit, complement string) (*Tache, error) {
 	}
 	consigne := fmt.Sprintf(`# Repair requested from the Athanor app
 
-You are in the Athanor kit folder (WSL). A health check failed; diagnose and repair it, without asking questions.
+You are in the Athanor kit folder (%s). A health check failed; diagnose and repair it, without asking questions.
 
 ## Check: %s
 %s
@@ -189,10 +237,10 @@ You are in the Athanor kit folder (WSL). A health check failed; diagnose and rep
 %s
 ## Rules
 - You may read and edit the kit files (system/, commands/, template/, .env except the token), install what is missing in ~/.local, $PWD/tools or with npm/pip/curl, and run the command again to verify.
-- sudo is not available in this session. If a step requires sudo or a Windows action (installer, UAC, restart), write the exact commands in logs/TODO_FOR_YOU.md and explain in two lines.
+- sudo is not available in this session. If a step requires sudo or a %s action (installer, %s, restart), write the exact commands in logs/TODO_FOR_YOU.md and explain in two lines.
 - Never read the value of the token and never print it.
 - End with a summary of 5 lines at most: what was broken, what you did, what remains to be done. Answer in the user's language (code: %s).
-`, v.Titre, v.Explication, v.Script, sortie, precision, langueDe(k))
+`, lieuKit(), v.Titre, v.Explication, v.Script, sortie, precision, actionSysteme(), fenetreAdmin(), langueDe(k))
 	return lancerClaude(k, "claude-"+v.ID, "Claude repairs: "+v.Titre, "repair-"+v.ID+".md", consigne, func(bool) { v.Verifier(k) }, func(t *Tache) { v.mu.Lock(); v.claude = t; v.mu.Unlock() })
 }
 
@@ -215,14 +263,40 @@ func lancerClaude(k Kit, id, nom, fichier, consigne string, fin func(bool), enre
 func DemandeLibre(k Kit, texte string) (*Tache, error) {
 	consigne := fmt.Sprintf(`# Request from the Athanor app
 
-You are in the Athanor kit folder (WSL), outside the sandbox. The user asks:
+You are in the Athanor kit folder (%s), outside the sandbox. The user asks:
 
 %s
 
-Rules: act without asking questions; install what is missing in ~/.local, $PWD/tools (portable) or with npm/pip/curl; for Windows software, use system/bin/install-windows ID (winget) when available, otherwise write the steps in logs/TODO_FOR_YOU.md; sudo is not available (write the commands to run in that same file); never read or print the token; end with a summary of 5 lines at most, in the user's language (code: %s).
-`, strings.TrimSpace(texte), langueDe(k))
+Rules: act without asking questions; install what is missing in ~/.local, $PWD/tools (portable) or with npm/pip/curl; %s, otherwise write the steps in logs/TODO_FOR_YOU.md; sudo is not available (write the commands to run in that same file); never read or print the token; end with a summary of 5 lines at most, in the user's language (code: %s).
+`, lieuKit(), strings.TrimSpace(texte), logicielsKit(), langueDe(k))
 	id := fmt.Sprintf("libre-%d", time.Now().UnixNano())
 	return lancerClaude(k, id, "Claude: "+court(texte, 60), id+".md", consigne, nil, nil)
+}
+
+// lieuKit, logicielsKit: where the kit runs, and how its software is installed, for Claude's instructions.
+func lieuKit() string {
+	if runtime.GOOS == "darwin" {
+		return "macOS"
+	}
+	return "WSL"
+}
+func actionSysteme() string {
+	if runtime.GOOS == "darwin" {
+		return "macOS"
+	}
+	return "Windows"
+}
+func fenetreAdmin() string {
+	if runtime.GOOS == "darwin" {
+		return "administrator password"
+	}
+	return "UAC"
+}
+func logicielsKit() string {
+	if runtime.GOOS == "darwin" {
+		return "for Mac software, use system/bin/install-mac NAME (Homebrew; --cask for an app)"
+	}
+	return "for Windows software, use system/bin/install-windows ID (winget) when available"
 }
 
 // langueDe reads LANGUAGE from the tool's .env (written by the app); "en" by default.

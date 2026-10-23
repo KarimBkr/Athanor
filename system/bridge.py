@@ -17,7 +17,7 @@ SYSTEME, TOOLS = (os.path.join(KIT, d) for d in ("system", "tools"))
 PROJECT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.join(KIT, "projet")
 DOSSIER = os.path.join(PROJECT, ".athanor", "pont")
 AUTORISES = {"tool", "unreal-editor", "unreal-cmd", "unreal-uat", "blender", "roblox-studio",
-             "install-windows", "pc-exec", "windows-var", "adb"}
+             "install-windows", "pc-exec", "windows-var", "adb", "install-mac", "mac-var"}
 en_cours = {}
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 

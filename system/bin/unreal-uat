@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# unreal-uat ARGUMENTS...: RunUAT (BuildCookRun to build the Windows game).
+# unreal-uat ARGUMENTS...: RunUAT (BuildCookRun to build the Windows game; on macOS the Mac, iOS or Android game).
 . "$(dirname "$0")/_common.sh"
 passer_par_le_pont "$@"
+if [ "$MAC" = 1 ]; then
+  sh="${UE_DIR:-}/Engine/Build/BatchFiles/RunUAT.sh"
+  [ -f "$sh" ] || absent "Unreal Engine"
+  convertir_args "$@"
+  exec bash "$sh" "${ARGS[@]}"
+fi
 bat="${UE_DIR:-}/Engine/Build/BatchFiles/RunUAT.bat"
 [ -f "$bat" ] || absent "Unreal Engine"
 convertir_args "$@"

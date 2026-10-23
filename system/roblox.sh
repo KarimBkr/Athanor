@@ -40,6 +40,7 @@ roblox_construire() {
 }
 
 roblox_studio_ouvert() {
+  [ "${MAC:-0}" = 1 ] && { pgrep -x RobloxStudio >/dev/null 2>&1; return; }
   (cd /mnt/c 2>/dev/null; tasklist.exe /FI "IMAGENAME eq RobloxStudioBeta.exe" /NH 2>/dev/null) | grep -qi 'RobloxStudioBeta'
 }
 
@@ -47,6 +48,13 @@ roblox_studio_ouvert() {
 # user's included), and prints their number.
 roblox_fermer_projet() {
   local w
+  if [ "${MAC:-0}" = 1 ]; then   # macOS: the Studios whose command line names a file of the project
+    local p n=0
+    for p in $(pgrep -x RobloxStudio 2>/dev/null); do
+      case "$(ps -p "$p" -o command= 2>/dev/null)" in *"$PROJECT/"*) kill "$p" 2>/dev/null && n=$((n + 1)) ;; esac
+    done
+    printf '%s' "$n"; return 0
+  fi
   w=$(wslpath -w "$PROJECT"); w=${w//\'/\'\'}; w="${w%\\}\\"
   (cd /mnt/c 2>/dev/null; powershell.exe -NoProfile -NonInteractive -Command "\$d = '$w'.ToLower(); \$n = 0; Get-CimInstance Win32_Process -Filter \"Name='RobloxStudioBeta.exe'\" | Where-Object { \$_.CommandLine -and \$_.CommandLine.Replace('/', '\\').ToLower().Contains(\$d) } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue; \$n++ }; \$n" 2>/dev/null) | tr -dc '0-9'
 }

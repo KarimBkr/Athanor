@@ -3,6 +3,7 @@
 package main
 
 // Linux or macOS (native kit, or code checking): same functions, without WSL or virtual desktop.
+// What differs between the two: systeme_linux.go, systeme_darwin.go.
 
 import (
 	"errors"
@@ -10,60 +11,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
+	"syscall"
 )
 
 func cacherFenetre(c *exec.Cmd) {}
 
-func commandeWSL(k Kit, script string) *exec.Cmd {
-	c := exec.Command("bash", "-lc", script)
-	c.Dir = k.Racine
-	return c
-}
-
-// DemarrerDetache: on Linux, the pilot simply goes to the background (setsid in start.sh --background).
-func DemarrerDetache(k Kit, script string) error {
-	if strings.Contains(script, "--attach") {
-		return nil // no WSL to keep awake outside Windows
-	}
-	c := exec.Command("bash", "-lc", strings.Replace(script, "--keep", "--background", 1))
-	c.Dir = k.Racine
-	_, err := c.Output()
-	return err
-}
-
-// FenetreWSL on Linux: the step runs in a terminal window of the desktop (the first one found).
-func FenetreWSL(k Kit, titre, script string) error {
-	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-		return errors.New("Interactive window: no graphical session; run in a terminal: " + script)
-	}
-	if err := os.MkdirAll(k.Journaux(), 0o755); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(k.Journaux(), "window-*.sh")
-	if err != nil {
-		return err
-	}
-	_, err = f.WriteString("cd " + citerShell(k.Racine) + " || exit 1\n" + script + "\necho\nread -p 'Press Enter to close' _\nrm -f -- \"$0\"\n")
-	f.Close()
-	if err != nil {
-		return err
-	}
-	for _, t := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"},
-		{"mate-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"xterm", "-e"}} {
-		if chemin, err := exec.LookPath(t[0]); err == nil {
-			c := exec.Command(chemin, append(t[1:], "bash", "-l", f.Name())...)
-			c.Dir = k.Racine
-			return c.Start()
-		}
-	}
-	os.Remove(f.Name())
-	return errors.New("Interactive window: no terminal found; run in a terminal: " + script)
-}
 func FenetrePowerShell(k Kit, s string) error { return errors.New("PowerShell: Windows only") }
-func Ouvrir(chemin string) error              { return exec.Command("xdg-open", chemin).Start() }
-func OuvrirFenetreApp(url string)             { _ = exec.Command("xdg-open", url).Start() }
 func FenetreApp(url string) bool              { return false }
 
 // Linux: the window is the browser's (no notification area icon); a second launch opens another one.
@@ -71,47 +25,12 @@ func permettrePremierPlan()                                               {}
 func montrerFenetre()                                                     { OuvrirFenetreApp(lienApp()) }
 func IconeNotification(langue func() string, ouvrir, quitter func()) bool { return false }
 
-// Linux: "open when the computer starts" = the desktop session's autostart entry
-// (~/.config/autostart/athanor.desktop, the freedesktop standard: GNOME, KDE, Xfce, Cinnamon…).
-func fichierAutostart() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "autostart", "athanor.desktop")
-}
-
-func DemarrageWindows(actif bool) error {
-	f := fichierAutostart()
-	if f == "" {
-		return errors.New("No configuration folder for the autostart entry")
-	}
-	if !actif {
-		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
-		return err
-	}
-	entree := "[Desktop Entry]\nType=Application\nName=Athanor\nComment=Claude Code building whole projects\nExec=\"" +
-		strings.ReplaceAll(exe, `"`, `\"`) + "\"\nPath=" + filepath.Dir(exe) + "\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
-	return os.WriteFile(f, []byte(entree), 0o644)
-}
-func DemarrageWindowsActif() bool {
-	_, err := os.Stat(fichierAutostart())
-	return err == nil
-}
 func migrerSysteme() {}
 
-// Bureau on Linux: Claude's desktop is the private X server each pilot runs (system/ecran.sh). The
-// option only writes or removes logs/bureau-isole, which the pilots read at every cycle; "View" opens
-// the picture of that screen in the application (GET /api/ecran).
+// Bureau on Linux: Claude's desktop is the private X server each pilot runs (system/ecran.sh); on macOS,
+// the Mac apps the gateways open start hidden. The option only writes or removes logs/bureau-isole, which
+// the pilots read at every cycle; on Linux "View" opens the picture of that screen in the application
+// (GET /api/ecran).
 type Bureau struct {
 	mu            sync.Mutex
 	kit           Kit
@@ -167,16 +86,16 @@ func (b *Bureau) marquer() {
 		return
 	}
 	os.MkdirAll(filepath.Dir(f), 0o755)
-	os.WriteFile(f, []byte("xvfb\n"), 0o644)
+	os.WriteFile(f, []byte(marqueBureau+"\n"), 0o644)
 }
 
 func (b *Bureau) Etat() EtatBureau {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.Actif {
-		return EtatBureau{Message: "Virtual desktop disabled (Options).", Ecran: true}
+		return EtatBureau{Message: "Virtual desktop disabled (Options).", Ecran: ecranBureau}
 	}
-	return EtatBureau{Disponible: true, Ecran: true, Message: "“Claude” screen ready: the Linux windows Claude opens go there, never on your screen."}
+	return EtatBureau{Disponible: true, Ecran: ecranBureau, Message: messageBureau}
 }
 func (b *Bureau) Voir() error        { return errors.New("Windows only") }
 func (b *Bureau) Revenir() error     { return errors.New("Windows only") }
@@ -191,6 +110,23 @@ func LancerIsole(args []string) int {
 func remettreBureau() {}
 
 func GardienRetour(args []string) int { return 2 }
+
+// lancerDetache (athanor --lancer ARGS): starts the application itself in a session of its own, without a
+// terminal, and returns at once: it outlives Athanor.app's launcher (system/macres/empaqueter.sh).
+func lancerDetache(args []string) int {
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	c := exec.Command(exe, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := c.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
 
 // arreterArbre stops a command (its own process; the script's timeout bounds the rest).
 func arreterArbre(c *exec.Cmd) {

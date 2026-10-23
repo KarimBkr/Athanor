@@ -2,6 +2,8 @@
 # Detects the PC tools (Unreal, Blender, Android SDK, Java, winget, Docker) and writes
 # system/pc_tools.env (for the gateways) and PROJECT/.athanor/PC_TOOLS.md (for Claude).
 SYSTEME="$(cd "$(dirname "$0")" && pwd)"; KIT="$(dirname "$SYSTEME")"
+# macOS: the GNU tools (find -printf, sort -V) and Bash 4, as for the pilot
+MAC=0; [ "$(uname -s 2>/dev/null)" = Darwin ] && . "$SYSTEME/safety.sh"
 UE_DIR="${UE_DIR:-}"; BLENDER_EXE="${BLENDER_EXE:-}"; ANDROID_SDK_DIR="${ANDROID_SDK_DIR:-}"; ANDROID_JDK_DIR="${ANDROID_JDK_DIR:-}"
 WINDOWS=0; command -v cmd.exe >/dev/null 2>&1 && WINDOWS=1
 # native Windows mode (Git Bash): the drives are /c, /d…, the profile is in the environment
@@ -47,11 +49,44 @@ if [ -z "$ANDROID_JDK_DIR" ]; then
   done
 fi
 ROBLOX_STUDIO=""; [ -n "$PROFIL" ] && ROBLOX_STUDIO=$(ls -t "$PROFIL"/AppData/Local/Roblox/Versions/*/RobloxStudioBeta.exe 2>/dev/null | head -n 1)
+# macOS: the apps live in /Applications (or ~/Applications, or anywhere Spotlight knows them), Unreal in
+# Epic's shared folder; the Android SDK where Android Studio or Homebrew put it.
+BREW=""
+if [ "$MAC" = 1 ]; then
+  for b in /opt/homebrew /usr/local; do [ -x "$b/bin/brew" ] && { BREW=$b; break; }; done
+  app_mac() {  # $1 = bundle identifier, then the usual places: the first app found
+    local id="$1" a; shift
+    for a in "$@"; do [ -d "$a" ] && { printf '%s\n' "$a"; return 0; }; done
+    mdfind "kMDItemCFBundleIdentifier == '$id'" 2>/dev/null | grep '\.app$' | head -n 1
+  }
+  if [ -z "$UE_DIR" ]; then
+    c=(); for d in "/Users/Shared/Epic Games"/UE_* "/Applications/Epic Games"/UE_* "$HOME/Epic Games"/UE_*; do
+      [ -d "$d/Engine/Binaries/Mac/UnrealEditor.app" ] && c+=("$d"); done
+    UE_DIR=$(plus_recent "${c[@]}")
+  fi
+  if [ -z "$BLENDER_EXE" ]; then
+    a=$(app_mac org.blenderfoundation.blender /Applications/Blender.app "$HOME/Applications/Blender.app")
+    [ -n "$a" ] && [ -x "$a/Contents/MacOS/Blender" ] && BLENDER_EXE="$a/Contents/MacOS/Blender"
+  fi
+  if [ -z "$ANDROID_SDK_DIR" ]; then
+    for d in "$KIT/tools/mac/android-sdk" "$HOME/Library/Android/sdk" "${BREW:-/nulle-part}/share/android-commandlinetools"; do
+      [ -d "$d/platform-tools" ] || [ -d "$d/cmdline-tools" ] && { ANDROID_SDK_DIR="$d"; break; }
+    done
+  fi
+  if [ -z "$ANDROID_JDK_DIR" ]; then
+    for d in "/Applications/Android Studio.app/Contents/jbr/Contents/Home" "$KIT"/tools/mac/jdk*/Contents/Home "$KIT"/tools/mac/jdk*; do
+      [ -x "$d/bin/java" ] && { ANDROID_JDK_DIR="$d"; break; }
+    done
+  fi
+  ROBLOX_STUDIO=$(app_mac com.roblox.RobloxStudio /Applications/RobloxStudio.app "$HOME/Applications/RobloxStudio.app")
+fi
 WINGET=0
 if [ "$NATIF" = 1 ]; then command -v winget.exe >/dev/null 2>&1 && WINGET=1
 elif [ "$WINDOWS" = 1 ]; then (cd /mnt/c && timeout 30 powershell.exe -NoProfile -Command "Get-Command winget" >/dev/null 2>&1) && WINGET=1; fi
-{ echo "UE_DIR='${UE_DIR}'"; echo "BLENDER_EXE='${BLENDER_EXE}'"; echo "ANDROID_SDK_DIR='${ANDROID_SDK_DIR}'"; echo "ANDROID_JDK_DIR='${ANDROID_JDK_DIR}'"; echo "WIN_PROFIL='${PROFIL}'"; } > "$SYSTEME/pc_tools.env"
-PROJECT="${PROJECT:-$KIT/projet}"; mkdir -p "$PROJECT/.athanor" "$KIT/tools/windows"
+{ echo "UE_DIR='${UE_DIR}'"; echo "BLENDER_EXE='${BLENDER_EXE}'"; echo "ANDROID_SDK_DIR='${ANDROID_SDK_DIR}'"; echo "ANDROID_JDK_DIR='${ANDROID_JDK_DIR}'"; echo "WIN_PROFIL='${PROFIL}'"
+  [ "$MAC" = 1 ] && echo "ROBLOX_STUDIO='${ROBLOX_STUDIO}'"; } > "$SYSTEME/pc_tools.env"
+PORTABLES=windows; [ "$MAC" = 1 ] && PORTABLES=mac
+PROJECT="${PROJECT:-$KIT/projet}"; mkdir -p "$PROJECT/.athanor" "$KIT/tools/$PORTABLES"
 {
   echo "# PC tools available (written by the pilot before each cycle, do not edit)"
   echo
@@ -59,7 +94,11 @@ PROJECT="${PROJECT:-$KIT/projet}"; mkdir -p "$PROJECT/.athanor" "$KIT/tools/wind
     echo "- **Unreal Engine**: $(basename "$UE_DIR")"
     echo "  - \`unreal-editor [--wait-mcp] Game.uproject\`: opens the editor (window) without blocking"
     echo "  - \`unreal-cmd Game.uproject -ExecCmds=\"...\" -unattended -nullrhi\`: commandlets and tests without a window"
-    echo "  - \`unreal-uat BuildCookRun -project=Game.uproject -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -archive -archivedirectory=deliverable\`: Windows game (\`-platform=Android -cookflavor=ASTC\` for Android)"
+    if [ "$MAC" = 1 ]; then
+      echo "  - \`unreal-uat BuildCookRun -project=Game.uproject -platform=Mac -clientconfig=Shipping -build -cook -stage -pak -archive -archivedirectory=deliverable\`: Mac game (\`-platform=IOS\` for iOS, Xcode required; \`-platform=Android -cookflavor=ASTC\` for Android)"
+    else
+      echo "  - \`unreal-uat BuildCookRun -project=Game.uproject -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -archive -archivedirectory=deliverable\`: Windows game (\`-platform=Android -cookflavor=ASTC\` for Android)"
+    fi
     [ "${UNREAL_MCP:-0}" = 1 ] && echo "  - **Unreal MCP active**: \`mcp__unreal__*\` tools when the editor is open (the pilot opens it before each cycle if a .uproject exists)"
   else
     echo "- Unreal Engine: not detected"
@@ -69,17 +108,23 @@ PROJECT="${PROJECT:-$KIT/projet}"; mkdir -p "$PROJECT/.athanor" "$KIT/tools/wind
     [ "${ROBLOX_MCP:-0}" = 1 ] && echo "  - **Roblox Studio MCP active**: \`mcp__roblox-studio__*\` tools on the open Studio (the pilot opens it before each cycle; Rojo project: \`.athanor/studio/SYNC.luau\` updates its scripts live, \`roblox-studio --rebuild\` rebuilds the place)"
   fi
   if [ -n "$BLENDER_EXE" ]; then echo "- **Blender**: \`blender -b -P script.py\`"; else echo "- Blender: not detected"; fi
-  if [ -n "$ANDROID_SDK_DIR" ]; then echo "- **Android SDK**: \`$ANDROID_SDK_DIR\`; \`adb devices\`, \`adb install -r game.apk\` (phone plugged in over USB)"; else echo "- Android SDK: missing (install it as a portable copy in \`\$TOOLS/windows/android-sdk\`, see PC_TOOLS_GUIDE.md)"; fi
+  if [ -n "$ANDROID_SDK_DIR" ]; then echo "- **Android SDK**: \`$ANDROID_SDK_DIR\`; \`adb devices\`, \`adb install -r game.apk\` (phone plugged in over USB)"; else echo "- Android SDK: missing (install it as a portable copy in \`\$TOOLS/$PORTABLES/android-sdk\`, see PC_TOOLS_GUIDE.md)"; fi
   if [ -n "$ANDROID_JDK_DIR" ]; then echo "- **Java for Android**: \`$ANDROID_JDK_DIR\`"; else echo "- Java (JDK) for Android: missing"; fi
-  if [ "$WINGET" = 1 ]; then echo "- **winget**: \`install-windows ID\` installs a Windows program (\`install-windows --search NAME\` to find the ID)"; else echo "- winget: unavailable"; fi
+  if [ "$MAC" = 1 ]; then
+    echo "- **macOS**: you run on the Mac itself, in Claude Code's sandbox (Seatbelt). No apt, no sudo: Linux-only tools are not there. The GNU tools come first in your PATH (\`sed -i\`, \`stat -c\`, \`date -d\`, \`find -printf\` work as on Linux: never \`sed -i ''\`)."
+    if [ -n "$BREW" ]; then echo "- **Homebrew**: \`install-mac NAME\` (command-line program), \`install-mac --cask NAME\` (Mac app), \`install-mac --search WORDS\` to find the name"; else echo "- Homebrew: not installed"; fi
+    echo "- **Portable Mac programs**: install them in \`\$TOOLS/mac\` (an app \`X.app\`, or a program), run them with \`pc-exec PATH ...\`; a \`.pkg\` installer with \`install-mac --file X.pkg\`; development variables with \`mac-var NAME PATH\`"
+  elif [ "$WINGET" = 1 ]; then echo "- **winget**: \`install-windows ID\` installs a Windows program (\`install-windows --search NAME\` to find the ID)"; else echo "- winget: unavailable"; fi
   if [ "$NATIF" = 1 ]; then echo "- **Native Windows**: you run on Windows itself (Git Bash): Windows programs run directly from your shell (\`program.exe ...\`, \`cmd //c ...\`, \`powershell -Command ...\`); portable ones go in \`\$TOOLS/windows\`"
   elif [ "$WINDOWS" = 1 ]; then echo "- **Portable Windows programs**: install them in \`\$TOOLS/windows\`, run them with \`pc-exec PATH.exe ...\`; Windows variables with \`windows-var NAME PATH\`"; fi
-  if [ -f "$KIT/logs/bureau-isole" ] && [ "$NATIF" = 1 ]; then
+  if [ -f "$KIT/logs/bureau-isole" ] && [ "$MAC" = 1 ]; then
+    echo "- **Claude's desktop**: the Mac apps the gateways open start hidden and in the background, never taking the focus. Prefer modes without a window (\`blender -b\`, \`unreal-cmd ... -nullrhi\`, a headless browser), and check what an app shows with its own screenshots."
+  elif [ -f "$KIT/logs/bureau-isole" ] && [ "$NATIF" = 1 ]; then
     echo "- **Claude's desktop**: the Windows programs you open never show on the user's screen (a Windows desktop of their own) and never take the focus. Check what they show with screenshots (the program's own, or a PowerShell capture of its window)."
   elif [ -f "$KIT/logs/bureau-isole" ]; then
     echo "- **Claude's desktop**: the programs you open never show on the user's screen (Windows programs through the gateways: a Windows desktop of their own; Linux programs: a private X screen, \`DISPLAY\` is set). Check what they show with screenshots: the program's own, or \`import -window root shot.png\` for the Linux screen."
   fi
-  if command -v docker >/dev/null 2>&1 && timeout 20 docker info >/dev/null 2>&1; then echo "- **Docker**: \`tool IMAGE COMMAND...\` (disposable container, project mounted on /work)"; else echo "- Docker: not available (Docker Desktop stopped$([ "$NATIF" = 1 ] || echo ", or WSL integration not enabled"))"; fi
+  if command -v docker >/dev/null 2>&1 && timeout 20 docker info >/dev/null 2>&1; then echo "- **Docker**: \`tool IMAGE COMMAND...\` (disposable container, project mounted on /work)"; else echo "- Docker: not available (Docker Desktop stopped$([ "$NATIF" = 1 ] || [ "$MAC" = 1 ] || echo ", or WSL integration not enabled"))"; fi
   # What is already installed, checked here once: the agents never spend turns probing it again.
   echo
   echo "## Toolchain (checked by the pilot when it started)"
@@ -110,7 +155,7 @@ PROJECT="${PROJECT:-$KIT/projet}"; mkdir -p "$PROJECT/.athanor" "$KIT/tools/wind
   # (Windows has a convert.exe of its own, which converts disks: ImageMagick is "magick" there)
   if [ "$NATIF" = 1 ]; then version ImageMagick magick -version; else version ImageMagick convert -version; fi
   version ffmpeg ffmpeg -version
-  local_outils=$(find "$KIT/tools" -mindepth 1 -maxdepth 1 -type d ! -name cache ! -name bin ! -name mcp ! -name windows ! -name plugin-data -printf '%f\n' 2>/dev/null | sort | head -n 30 | tr '\n' ' ')
+  local_outils=$(find "$KIT/tools" -mindepth 1 -maxdepth 1 -type d ! -name cache ! -name bin ! -name mcp ! -name windows ! -name mac ! -name plugin-data -printf '%f\n' 2>/dev/null | sort | head -n 30 | tr '\n' ' ')
   [ -n "$local_outils" ] && echo "- Portable installs already in \`\$TOOLS\`: $local_outils"
   local_bin=$(find "$KIT/tools/bin" -mindepth 1 -maxdepth 1 \( -type f -o -type l \) -printf '%f\n' 2>/dev/null | sort | head -n 40 | tr '\n' ' ')
   [ -n "$local_bin" ] && echo "- Commands already in \`\$TOOLS/bin\` (not checked here): $local_bin"

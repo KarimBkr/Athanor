@@ -21,9 +21,11 @@ __pycache__/
 # Previous name of the tool (Claude Autopilote)
 /autopilote-config.json
 /Autopilote.exe
-# Binaries: provided in Releases (Windows and Linux side by side in the tool folder)
+# Binaries: provided in Releases (Windows, Linux and macOS side by side in the tool folder)
 /Athanor.exe
+/Athanor.app/
 /athanor
 /athanor-linux-*
 /app/Athanor.exe
 /app/athanor
+.DS_Store

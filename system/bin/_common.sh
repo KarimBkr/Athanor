@@ -15,12 +15,37 @@ case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*)
   [ -n "${TOOLS:-}" ] && TOOLS=$(cygpath -u "$TOOLS")
   ;;
 esac
+# macOS: the GNU tools of Homebrew (stat -c, date +%N…) when the caller did not put them in the PATH
+MAC=0
+if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+  MAC=1
+  for _b in /opt/homebrew /usr/local; do
+    [ -d "$_b/opt/coreutils/libexec/gnubin" ] || continue
+    case ":$PATH:" in *":$_b/opt/coreutils/libexec/gnubin:"*) ;; *) export PATH="$_b/opt/coreutils/libexec/gnubin:$_b/bin:$PATH" ;; esac
+    break
+  done
+  unset _b
+fi
 [ -f "$SYSTEME/pc_tools.env" ] && . "$SYSTEME/pc_tools.env"
 
 # Converts Linux paths to Windows paths for a .exe program (also "-opt=/path").
+# macOS: a Mac app opened through LaunchServices does not start in the current folder: the relative paths
+# of existing files become absolute instead.
 convertir_args() {
   ARGS=()
   local a cle val
+  if [ "$MAC" = 1 ]; then
+    for a in "$@"; do
+      if [[ "$a" != /* && "$a" != -* ]] && [ -e "$a" ]; then
+        ARGS+=("$(pwd)/$a")
+      elif [[ "$a" == -*=* && "${a#*=}" != /* ]] && [ -n "${a#*=}" ] && [ -e "${a#*=}" ]; then
+        ARGS+=("${a%%=*}=$(pwd)/${a#*=}")
+      else
+        ARGS+=("$a")
+      fi
+    done
+    return 0
+  fi
   for a in "$@"; do
     if [[ "$a" == /* ]] && [ -e "$a" -o -e "$(dirname "$a")" ]; then
       ARGS+=("$(wslpath -w "$a")")
@@ -72,6 +97,32 @@ lancer_windows() {
   "$@"
 }
 
+# macOS: a Mac app (APP.app) opens through LaunchServices, in the background (-g: it never takes the focus),
+# a new instance each time (-n). With the "Claude's desktop" option (logs/bureau-isole) it also starts
+# hidden (-j): macOS gives no other desktop a program can be sent to, a hidden app stays off the user's
+# screen until someone shows it. Usage: lancer_mac [--attendre] APP.app ARGUMENTS...
+# Returns at once (the app keeps running); --attendre: waits until the app quits, returns its code.
+lancer_mac() {
+  local o=(-g -n)
+  [ "${1:-}" = "--attendre" ] && { o+=(-W); shift; }
+  [ -f "$KIT/logs/bureau-isole" ] && o+=(-j)
+  local app="$1"; shift
+  open "${o[@]}" -a "$app" --args "$@"
+}
+
+# macOS: a program downloaded by Claude carries no quarantine, but an unsigned one is refused by macOS on
+# Apple chips: it gets an ad hoc signature (local, only valid on this Mac). $1 = file or .app
+preparer_mac() {
+  xattr -dr com.apple.quarantine "$1" 2>/dev/null
+  codesign -v "$1" >/dev/null 2>&1 || codesign -s - -f --deep "$1" >/dev/null 2>&1
+  # the application firewall on: the program may receive connections (a game server, a dev server) without
+  # the "Accept incoming connections?" window, when the administrator helper is allowed
+  case "$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null)" in
+    *enabled*|*"State = 1"*) executer_admin firewall "$1" >/dev/null 2>&1 ;;
+  esac
+  return 0
+}
+
 # Bridge: inside the sandbox, a gateway cannot start a Windows program or reach Docker.
 # It therefore hands the command to the bridge (system/bridge.py, outside the sandbox) and shows its output live.
 # Called at the top of every gateway: passer_par_le_pont "$@"
@@ -109,7 +160,14 @@ PY
 # by the user, in the app: Setup & health -> Administrator rights). No UAC prompt. Prints the output, returns the
 # exit code; 127 if the task does not exist, 124 if no answer after 20 minutes.
 # Usage: executer_admin "C:\path\program.exe" "arg1 arg2"   or   executer_admin WINGET_ID
+# macOS: through the administrator helper the user allowed once (commands/allow-admin-mac.sh: a sudo rule
+# for /Library/Athanor/athanor-admin alone, no password asked). Usage: executer_admin ACTION PATH
 executer_admin() {
+  if [ "$MAC" = 1 ]; then
+    [ -x /Library/Athanor/athanor-admin ] && sudo -n -l /Library/Athanor/athanor-admin >/dev/null 2>&1 || return 127
+    sudo -n /Library/Athanor/athanor-admin "$@"
+    return
+  fi
   local tache="Athanor - installations" dossier="$KIT/tools/windows/admin-requests" n code
   (cd /mnt/c 2>/dev/null; schtasks.exe /query /tn "$tache" >/dev/null 2>&1) || return 127
   mkdir -p "$dossier"; n="$(date +%s)-$$"

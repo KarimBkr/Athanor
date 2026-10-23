@@ -1,4 +1,4 @@
-# Builds Athanor for Windows and Linux and publishes a GitHub Release every time a version tag is pushed:
+# Builds Athanor for Windows, Linux and macOS and publishes a GitHub Release every time a version tag is pushed:
 #   git tag v2.0.1 && git push origin v2.0.1
 # Each download is the complete tool (the app needs commands/, system/ and template/ next to it).
 name: Release
@@ -26,6 +26,7 @@ jobs:
         run: |
           go vet .
           GOOS=windows GOARCH=amd64 go vet .
+          GOOS=darwin GOARCH=arm64 go vet .
           go test ./...
 
       - name: Build
@@ -38,6 +39,9 @@ jobs:
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o ../build/Athanor.exe .
           # Linux: static binary, runs on any distribution
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/athanor .
+          # macOS: one program for Apple chips and Intel Macs (joined by llvm-lipo in the Package step)
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/athanor-darwin-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/athanor-darwin-amd64 .
 
       - name: Package
         run: |
@@ -54,6 +58,11 @@ jobs:
           export_tree linux
           install -m 755 build/athanor pkg-linux/athanor/athanor
           tar -C pkg-linux -czf "dist/Athanor-${version}-Linux.tar.gz" athanor
+          # macOS: tar.gz (keeps the executable bits), with Athanor.app at the root of the tool folder
+          command -v llvm-lipo >/dev/null 2>&1 || ls /usr/bin/llvm-lipo* >/dev/null 2>&1 || sudo apt-get install -y -qq llvm >/dev/null
+          export_tree mac
+          bash app/macres/empaqueter.sh pkg-mac/athanor/Athanor.app build/athanor-darwin-arm64 build/athanor-darwin-amd64
+          tar -C pkg-mac -czf "dist/Athanor-${version}-macOS.tar.gz" athanor
           (cd dist && sha256sum ./* | sed 's#\./##' > SHA256SUMS.txt)
           ls -l dist
           # Release text: what is new (docs/releases/VERSION.md, when present), then the downloads.
@@ -66,6 +75,7 @@ jobs:
             echo "| Your system | Download | Then |"
             echo "|---|---|---|"
             echo "| **Windows 10 / 11** | [**Athanor-${version}-Windows.zip**](${telecharger}/Athanor-${version}-Windows.zip) | unzip anywhere, double-click **\`Athanor.exe\`** |"
+            echo "| **macOS** 11 or later (Apple chip or Intel) | [**Athanor-${version}-macOS.tar.gz**](${telecharger}/Athanor-${version}-macOS.tar.gz) | double-click to extract, run \`commands/install-mac.sh\` once in Terminal, then open **\`Athanor.app\`** (the first time: right click → *Open*) |"
             echo "| **Linux** (x86-64) | [**Athanor-${version}-Linux.tar.gz**](${telecharger}/Athanor-${version}-Linux.tar.gz) | \`tar xzf Athanor-${version}-Linux.tar.gz && cd athanor && commands/install.sh && ./athanor\` |"
             echo
             echo "Each download is the complete tool, ready to use. **Updating:** close the app (right click on its icon → *Quit* if it started with Windows) and extract the new version in the same place: your token, settings, \`logs/\` and \`tools/\` are kept."
@@ -81,4 +91,5 @@ jobs:
           files: |
             dist/Athanor-${{ env.VERSION }}-Windows.zip
             dist/Athanor-${{ env.VERSION }}-Linux.tar.gz
+            dist/Athanor-${{ env.VERSION }}-macOS.tar.gz
             dist/SHA256SUMS.txt

@@ -65,7 +65,7 @@ You describe what you want: a game, a website, an app, a tool. Athanor runs [Cla
 
 ## Quick start
 
-**You need:** Windows 10/11 (WSL2 is installed for you) or Linux, and a Claude subscription (Pro, Max or Team).
+**You need:** Windows 10/11 (WSL2 is installed for you), macOS 11 or later (Apple chip or Intel, with [Homebrew](https://brew.sh)) or Linux, and a Claude subscription (Pro, Max or Team).
 
 ### 1. Get Athanor
 
@@ -80,6 +80,7 @@ You describe what you want: a game, a website, an app, a tool. Athanor runs [Cla
 From the [**latest release**](https://github.com/Aprilox/Athanor/releases/latest):
 
 - **Windows**: `Athanor-X.Y.Z-Windows.zip`, unzip it anywhere (the Desktop, for example).
+- **macOS**: `Athanor-X.Y.Z-macOS.tar.gz`, double-click it to extract.
 - **Linux**: `Athanor-X.Y.Z-Linux.tar.gz`, then `tar xzf Athanor-X.Y.Z-Linux.tar.gz`.
 
 Each download is the complete tool, ready to use.
@@ -99,22 +100,22 @@ cd Athanor
 
 No git? *Code → Download ZIP*, unzip, double-click `build.cmd`. If Go is missing, `build.cmd` offers to install it with winget.
 
-**Linux**:
+**Linux** or **macOS**:
 
 ```bash
 git clone https://github.com/Aprilox/Athanor.git
 cd Athanor
-./build.sh
+./build.sh                   # on a Mac, also builds Athanor.app
 ```
 
 </td>
 </tr>
 </table>
 
-Both options give the same folder: `Athanor.exe` (or `athanor`) next to `commands/`, `system/` and `template/`. The app needs them, so always keep the whole folder together.
+Both options give the same folder: `Athanor.exe` (or `athanor`, or `Athanor.app` on a Mac) next to `commands/`, `system/` and `template/`. The app needs them, so always keep the whole folder together.
 
 > [!TIP]
-> On a downloaded release, Windows SmartScreen may show *"Windows protected your PC"* the first time, because the app is not code-signed. Click *More info → Run anyway*. An `Athanor.exe` you built yourself does not trigger it.
+> On a downloaded release, Windows SmartScreen may show *"Windows protected your PC"* the first time, because the app is not code-signed. Click *More info → Run anyway*. An `Athanor.exe` you built yourself does not trigger it. On a Mac, macOS says it cannot check the developer of `Athanor.app`: right click → *Open* → *Open*, once.
 
 ### 2. First launch
 
@@ -138,6 +139,15 @@ commands/configure.sh        # token, models, options
 
 Then add a project and start it, as on Windows (steps 5 and 6).
 
+**macOS** (the scripts run on the Mac itself, in Claude Code's own sandbox)
+
+```bash
+cd athanor                   # in Terminal; or Athanor, if you built it from source
+commands/install-mac.sh      # Homebrew's tools, Claude Code, RTK (Homebrew must be installed: brew.sh)
+```
+
+Then open **`Athanor.app`** and follow the first-launch guide from step 3, as on Windows. Optional, recommended: *Setup & health* → *Administrator rights for installations* → *Repair* (your password, once). See [On macOS](#on-macos) for what changes.
+
 ### 3. Updating
 
 | You installed | To update |
@@ -145,7 +155,7 @@ Then add a project and start it, as on Windows (steps 5 and 6).
 | a release | close the app, download the new release and extract it in the same place, so that its `athanor` folder merges into yours |
 | from source | close the app, then `git pull` and run `build.cmd` (or `./build.sh`) again |
 
-Your `.env`, settings, `logs/` and `tools/` are never touched by an update. The Windows and Linux apps keep separate settings files (`athanor-config.json`, `athanor-config-linux.json`), so a tool folder shared between both systems (dual boot, for example) works with both.
+Your `.env`, settings, `logs/` and `tools/` are never touched by an update. The Windows, Linux and macOS apps keep separate settings files (`athanor-config.json`, `athanor-config-linux.json`, `athanor-config-darwin.json`), so a tool folder shared between both systems (dual boot, for example) works with both.
 
 The app only uses Go's standard library plus three vendored packages for the WebView2 window, so building needs no network access once the source is on your disk.
 
@@ -288,6 +298,18 @@ This table is the WSL mode, the default. In the native Windows mode below, there
 - The project must be in a folder of a Windows drive (`C:\...`, `D:\...`), not in the WSL file system. Its history (cycles, statistics) carries over between the two modes.
 - The mode applies to the pilots started afterwards; stop the running ones first. When you close Athanor while native pilots run, it asks whether they go on in the background or stop.
 - Claude's Linux screen does not exist in this mode; Claude's Windows desktop still keeps the programs it opens away from yours.
+
+### On macOS
+
+The pilot and Claude run on the Mac itself. The sandbox is Claude Code's own on macOS (**Seatbelt**): Claude's commands write only in the project and `tools/`, never read your home folder, the other accounts (`/Users`) or the other drives (`/Volumes`), and cannot leave the sandbox through macOS either: starting an app (`open`), a launchd job (`launchctl`) or sending an Apple event (`osascript`) is refused. *Setup & health → Test the sandbox* proves each of these with a real session.
+
+- **Tools**: Homebrew's, installed by `commands/install-mac.sh` (Bash 4 or later and the GNU tools the scripts use: macOS ships Bash 3.2).
+- **Gateways**: `unreal-editor`, `unreal-cmd`, `unreal-uat` (Mac, iOS with Xcode, and Android games), `blender`, `roblox-studio`, `adb` and `tool` reach the Mac versions of these programs. `install-mac NAME` (or `--cask NAME`, `--file X.pkg`) replaces `install-windows`, `mac-var` replaces `windows-var`, and `pc-exec` runs an app (`.app`) or a program of the project or of `tools/mac`.
+- **Administrator rights**: `commands/allow-admin-mac.sh` (or *Repair* in *Setup & health*) installs a helper in `/Library/Athanor`, owned by root, and a sudo rule for that helper alone. It only installs `.pkg` installers and lets a program through the application firewall, for files in your home folder. Withdraw it with `commands/allow-admin-mac.sh --remove`.
+- **Claude's desktop**: macOS has no second desktop a program can be sent to. With the option on, the Mac apps the gateways open start hidden and in the background: they never take your screen or the focus. Claude prefers modes without a window (`blender -b`, `unreal-cmd … -nullrhi`, headless browsers).
+- **Local MCP servers** run in a Seatbelt cage of their own (`system/mcp-jail.sh`), with the same rules as the Linux cage. Roblox Studio's server is the `StudioMCP` program inside the app.
+- **Sleep**: the Mac does not go to sleep while a pilot runs (`caffeinate`); the screen still turns off.
+- **The app**: `Athanor.app` opens in a Chrome, Edge or Brave window when one is installed, else in your browser; double-click it again to get another window. It keeps running in the background when the window is closed, like on Linux.
 
 ---
 

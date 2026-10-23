@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 # unreal-cmd ARGUMENTS...: UnrealEditor-Cmd.exe (commandlets, automated tests, screenshots) without a window.
+# macOS: UnrealEditor-Cmd when the engine has one, else the editor's own program (commandlets need no window).
 . "$(dirname "$0")/_common.sh"
 passer_par_le_pont "$@"
+if [ "$MAC" = 1 ]; then
+  for exe in "${UE_DIR:-/nulle-part}/Engine/Binaries/Mac/UnrealEditor-Cmd" "${UE_DIR:-/nulle-part}/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor"; do
+    [ -x "$exe" ] && break
+  done
+  [ -x "$exe" ] || absent "Unreal Engine"
+  convertir_args "$@"
+  exec "$exe" "${ARGS[@]}"
+fi
 exe="${UE_DIR:-}/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 [ -f "$exe" ] || absent "Unreal Engine"
 convertir_args "$@"

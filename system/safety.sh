@@ -21,6 +21,39 @@ if [ "$NATIF" = 1 ]; then
   unset _natif
 fi
 
+# macOS: the GNU tools of Homebrew (coreutils, findutils, sed: the scripts use their options) and the
+# shims of system/mac (setsid, pkill -s) come first in the PATH, and MAC=1 tells the scripts. Claude runs
+# in Claude Code's own sandbox there (Seatbelt). The scripts need Bash 4 or later (associative arrays,
+# mapfile): one started by the Bash of macOS (3.2) restarts with Homebrew's.
+MAC=0
+if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+  MAC=1
+  _brew=""; for _b in /opt/homebrew /usr/local; do [ -x "$_b/bin/brew" ] && { _brew=$_b; break; }; done
+  _mac="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mac"
+  case ":$PATH:" in
+    *":$_mac:"*) ;;
+    *) _p="$_mac"
+       if [ -n "$_brew" ]; then
+         for _d in coreutils findutils gnu-sed; do [ -d "$_brew/opt/$_d/libexec/gnubin" ] && _p="$_p:$_brew/opt/$_d/libexec/gnubin"; done
+         _p="$_p:$_brew/bin:$_brew/sbin"
+       fi
+       export PATH="$_p:$PATH" ;;
+  esac
+  export ATHANOR_MAC=1
+  if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    if [ -n "$_brew" ] && [ -x "$_brew/bin/bash" ] && [ -f "$0" ]; then exec "$_brew/bin/bash" "$0" "$@"; fi
+    echo "Athanor needs Bash 4 or later on macOS: brew install bash (or run commands/install-mac.sh)." >&2
+    exit 1
+  fi
+  unset _brew _mac _p _d _b
+fi
+
+# The command line of process $1 (empty when it does not exist): /proc on Linux, ps elsewhere.
+ligne_de_commande() {
+  if [ -r "/proc/$1/cmdline" ]; then tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null
+  else ps -p "$1" -o command= 2>/dev/null; fi
+}
+
 # The pilot's private folder for a project: $1 = absolute path of the project.
 # Previous name of the tool (Claude Autopilote): the workshop was PROJECT/.autopilote. It is renamed
 # to .athanor (never while an old pilot is alive in it); a near-empty .athanor (only a STOP file,
@@ -52,7 +85,7 @@ pilote_vivant() {
   p=$(pid_sur "$(cat "$(prive_de "$1")/pilot.pid" 2>/dev/null)")
   if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then printf '%s' "$p"; return 0; fi
   p=$(pid_sur "$(cat "$1/.athanor/pilot.pid" 2>/dev/null)")
-  if [ -n "$p" ] && kill -0 "$p" 2>/dev/null && tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'system/pilot\.sh'; then
+  if [ -n "$p" ] && kill -0 "$p" 2>/dev/null && ligne_de_commande "$p" | grep -q 'system/pilot\.sh'; then
     printf '%s' "$p"; return 0
   fi
   return 1

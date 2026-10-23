@@ -65,7 +65,7 @@ Vous décrivez ce que vous voulez : un jeu, un site, une application, un outil. 
 
 ## Démarrage rapide
 
-**Il faut :** Windows 10/11 (WSL2 est installé pour vous) ou Linux, et un abonnement Claude (Pro, Max ou Team). Facultatif : Unreal Engine 5.8, Blender, Docker Desktop.
+**Il faut :** Windows 10/11 (WSL2 est installé pour vous), macOS 11 ou plus récent (puce Apple ou Intel, avec [Homebrew](https://brew.sh)) ou Linux, et un abonnement Claude (Pro, Max ou Team). Facultatif : Unreal Engine 5.8, Blender, Docker Desktop.
 
 ### 1. Récupérer Athanor
 
@@ -80,6 +80,7 @@ Vous décrivez ce que vous voulez : un jeu, un site, une application, un outil. 
 Depuis la [**dernière version**](https://github.com/Aprilox/Athanor/releases/latest) :
 
 - **Windows** : `Athanor-X.Y.Z-Windows.zip`, à dézipper où vous voulez (sur le Bureau, par exemple).
+- **macOS** : `Athanor-X.Y.Z-macOS.tar.gz`, à extraire d'un double-clic.
 - **Linux** : `Athanor-X.Y.Z-Linux.tar.gz`, puis `tar xzf Athanor-X.Y.Z-Linux.tar.gz`.
 
 Chaque téléchargement est l'outil complet, prêt à l'emploi.
@@ -99,22 +100,22 @@ cd Athanor
 
 Pas de git ? *Code → Download ZIP*, dézippez, double-cliquez sur `build.cmd`. Si Go manque, `build.cmd` propose de l'installer avec winget.
 
-**Linux** :
+**Linux** ou **macOS** :
 
 ```bash
 git clone https://github.com/Aprilox/Athanor.git
 cd Athanor
-./build.sh
+./build.sh                   # sur un Mac, fabrique aussi Athanor.app
 ```
 
 </td>
 </tr>
 </table>
 
-Les deux options donnent le même dossier : `Athanor.exe` (ou `athanor`) à côté de `commands/`, `system/` et `template/`. L'application en a besoin : gardez toujours le dossier entier.
+Les deux options donnent le même dossier : `Athanor.exe` (ou `athanor`, ou `Athanor.app` sur un Mac) à côté de `commands/`, `system/` et `template/`. L'application en a besoin : gardez toujours le dossier entier.
 
 > [!TIP]
-> Avec une version téléchargée, Windows SmartScreen peut afficher *« Windows a protégé votre ordinateur »* au premier lancement, parce que l'application n'est pas signée. Cliquez sur *Informations complémentaires → Exécuter quand même*. Un `Athanor.exe` compilé par vous-même ne le déclenche pas.
+> Avec une version téléchargée, Windows SmartScreen peut afficher *« Windows a protégé votre ordinateur »* au premier lancement, parce que l'application n'est pas signée. Cliquez sur *Informations complémentaires → Exécuter quand même*. Un `Athanor.exe` compilé par vous-même ne le déclenche pas. Sur un Mac, macOS indique qu'il ne peut pas vérifier le développeur d'`Athanor.app` : clic droit → *Ouvrir* → *Ouvrir*, une seule fois.
 
 ### 2. Premier lancement
 
@@ -138,6 +139,15 @@ commands/configure.sh        # jeton, modèles, options
 
 Ajoutez ensuite un projet et démarrez-le, comme sous Windows (étapes 5 et 6).
 
+**macOS** (les scripts tournent sur le Mac lui-même, dans le bac à sable de Claude Code)
+
+```bash
+cd athanor                   # dans Terminal ; ou Athanor, si vous l'avez compilé depuis les sources
+commands/install-mac.sh      # outils Homebrew, Claude Code, RTK (Homebrew doit être installé : brew.sh)
+```
+
+Ouvrez ensuite **`Athanor.app`** et suivez le guide du premier démarrage à partir de l'étape 3, comme sous Windows. Facultatif, recommandé : *Installation & santé* → *Droits administrateur pour les installations* → *Réparer* (votre mot de passe, une fois). Voir [Sur macOS](#sur-macos) pour ce qui change.
+
 ### 3. Mettre à jour
 
 | Vous avez installé | Pour mettre à jour |
@@ -145,7 +155,7 @@ Ajoutez ensuite un projet et démarrez-le, comme sous Windows (étapes 5 et 6).
 | une version téléchargée | fermez l'application, téléchargez la nouvelle version et extrayez-la au même endroit, pour que son dossier `athanor` se fusionne avec le vôtre |
 | depuis les sources | fermez l'application, puis `git pull` et relancez `build.cmd` (ou `./build.sh`) |
 
-Votre `.env`, vos réglages, `logs/` et `tools/` ne sont jamais touchés par une mise à jour. Les applications Windows et Linux gardent des fichiers de réglages séparés (`athanor-config.json`, `athanor-config-linux.json`) : un dossier de l'outil partagé entre les deux systèmes (double démarrage, par exemple) fonctionne avec les deux.
+Votre `.env`, vos réglages, `logs/` et `tools/` ne sont jamais touchés par une mise à jour. Les applications Windows, Linux et macOS gardent des fichiers de réglages séparés (`athanor-config.json`, `athanor-config-linux.json`, `athanor-config-darwin.json`) : un dossier de l'outil partagé entre les deux systèmes (double démarrage, par exemple) fonctionne avec les deux.
 
 L'application n'utilise que la bibliothèque standard de Go et trois paquets embarqués pour la fenêtre WebView2 : une fois les sources sur votre disque, la compilation ne demande aucun accès réseau.
 
@@ -288,6 +298,18 @@ Ce tableau décrit le mode WSL, celui par défaut. Dans le mode Windows natif ci
 - Le projet doit être dans un dossier d'un lecteur Windows (`C:\...`, `D:\...`), pas dans le système de fichiers WSL. Son historique (cycles, statistiques) passe d'un mode à l'autre.
 - Le mode s'applique aux pilotes lancés ensuite ; arrêtez d'abord ceux qui tournent. Si vous fermez Athanor pendant que des pilotes natifs tournent, il demande s'ils continuent en arrière-plan ou s'arrêtent.
 - L'écran Linux de Claude n'existe pas dans ce mode ; le bureau Windows de Claude garde toujours à l'écart les programmes qu'il ouvre.
+
+### Sur macOS
+
+Le pilote et Claude tournent sur le Mac lui-même. La barrière est le bac à sable de Claude Code sur macOS (**Seatbelt**) : les commandes de Claude n'écrivent que dans le projet et `tools/`, ne lisent jamais votre dossier personnel, les autres comptes (`/Users`) ni les autres disques (`/Volumes`), et ne peuvent pas non plus sortir de la barrière par macOS : lancer une app (`open`), une tâche launchd (`launchctl`) ou envoyer un Apple Event (`osascript`) est refusé. *Installation & santé → Tester la barrière* prouve chacun de ces points avec une vraie session.
+
+- **Outils** : ceux de Homebrew, installés par `commands/install-mac.sh` (Bash 4 ou plus récent et les outils GNU qu'utilisent les scripts : macOS fournit Bash 3.2).
+- **Passerelles** : `unreal-editor`, `unreal-cmd`, `unreal-uat` (jeux Mac, iOS avec Xcode, et Android), `blender`, `roblox-studio`, `adb` et `tool` atteignent les versions Mac de ces programmes. `install-mac NOM` (ou `--cask NOM`, `--file X.pkg`) remplace `install-windows`, `mac-var` remplace `windows-var`, et `pc-exec` lance une app (`.app`) ou un programme du projet ou de `tools/mac`.
+- **Droits administrateur** : `commands/allow-admin-mac.sh` (ou *Réparer* dans *Installation & santé*) installe un assistant dans `/Library/Athanor`, appartenant à root, et une règle sudo pour ce seul assistant. Il ne fait qu'installer des paquets `.pkg` et laisser passer un programme dans le pare-feu applicatif, pour des fichiers de votre dossier personnel. Retirez-le avec `commands/allow-admin-mac.sh --remove`.
+- **Bureau de Claude** : macOS n'a pas de second bureau où envoyer un programme. Avec l'option activée, les apps Mac ouvertes par les passerelles démarrent masquées et en arrière-plan : elles ne prennent jamais votre écran ni le focus. Claude privilégie les modes sans fenêtre (`blender -b`, `unreal-cmd … -nullrhi`, navigateurs headless).
+- **Serveurs MCP locaux** : ils tournent dans leur propre cage Seatbelt (`system/mcp-jail.sh`), avec les mêmes règles que la cage Linux. Le serveur de Roblox Studio est le programme `StudioMCP` inclus dans l'app.
+- **Veille** : le Mac ne se met pas en veille tant qu'un pilote tourne (`caffeinate`) ; l'écran, lui, s'éteint.
+- **L'application** : `Athanor.app` s'ouvre dans une fenêtre Chrome, Edge ou Brave si l'un d'eux est installé, sinon dans votre navigateur ; double-cliquez de nouveau pour une autre fenêtre. Elle continue en arrière-plan quand la fenêtre est fermée, comme sous Linux.
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Athanor (WSL2 / Linux): configuration assistant
+#  Athanor (WSL2 / Linux / macOS): configuration assistant
 #  Asks a few questions and writes .env (settings shared by all projects). The app
 #  drives it. Run it again whenever you want: your current answers are
 #  offered as defaults (Enter key).
@@ -8,6 +8,7 @@
 # =============================================================================
 set -u
 cd "$(dirname "$0")/.." || exit 1
+. system/safety.sh                      # macOS: Bash 4 or later and the GNU tools
 export PATH="$HOME/.local/bin:$PATH"   # Claude Code (native install)
 
 ENV_FICHIER=.env
@@ -172,6 +173,8 @@ titre "7. Time zone of the logs"
 tz_defaut=$(valeur_actuelle TZ)
 if [ -z "$tz_defaut" ]; then
   tz_defaut=$( (timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null) | head -n 1)
+  # macOS: /etc/localtime links to the zone (…/zoneinfo/Europe/Paris)
+  [ -z "$tz_defaut" ] && tz_defaut=$(readlink /etc/localtime 2>/dev/null | sed -n 's#.*/zoneinfo/##p')
 fi
 demander "Time zone" "${tz_defaut:-UTC}"; TZ_CHOISI=$REPONSE
 

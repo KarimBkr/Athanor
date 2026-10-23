@@ -131,7 +131,7 @@ func ouvrirLien(url string) error {
 	if runtime.GOOS == "windows" {
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	}
-	return exec.Command("xdg-open", url).Start()
+	return Ouvrir(url)
 }
 
 func (s *Serveur) apiGitHub(w http.ResponseWriter, r *http.Request) {

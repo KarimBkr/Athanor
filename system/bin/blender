@@ -4,5 +4,6 @@
 passer_par_le_pont "$@"
 [ -n "${BLENDER_EXE:-}" ] && [ -f "$BLENDER_EXE" ] || absent Blender
 convertir_args "$@"
+[ "$MAC" = 1 ] && exec "$BLENDER_EXE" "${ARGS[@]}"   # macOS: the program inside Blender.app
 lancer_windows "$BLENDER_EXE" "${ARGS[@]}"
 exit $?

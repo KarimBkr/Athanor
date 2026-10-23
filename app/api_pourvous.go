@@ -587,6 +587,11 @@ $n = [Windows.UI.Notifications.ToastNotification]::new($d)
 		cacherFenetre(c)
 		_ = c.Start()
 		go func() { _ = c.Wait() }()
+	case "darwin":
+		// the texts go as arguments of the script, never inside its text
+		c := exec.Command("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", titre, texte)
+		_ = c.Start()
+		go func() { _ = c.Wait() }()
 	default:
 		if chemin, err := exec.LookPath("notify-send"); err == nil {
 			c := exec.Command(chemin, "-a", "Athanor", titre, texte)

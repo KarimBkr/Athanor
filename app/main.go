@@ -26,6 +26,11 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--isole" {
 		os.Exit(LancerIsole(os.Args[2:]))
 	}
+	// macOS, Athanor.app: its launcher starts the application detached and ends at once, so that each
+	// double click starts it again (and an application already running opens a window).
+	if len(os.Args) > 1 && os.Args[1] == "--lancer" {
+		os.Exit(lancerDetache(os.Args[2:]))
+	}
 	// Athanor.exe --retour PID: brings the user back from Claude's desktop if the application disappears.
 	if len(os.Args) > 1 && os.Args[1] == "--retour" {
 		os.Exit(GardienRetour(os.Args[2:]))

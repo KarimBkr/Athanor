@@ -3,6 +3,7 @@
 # Reads the instruction from file $1, works in the kit folder OUTSIDE the sandbox (so it can
 # install and fix the tooling itself), without sudo. Output: stream-json flow (the app translates it).
 cd "$(dirname "$0")/.." || exit 1
+. system/safety.sh   # macOS: the GNU tools (timeout) and Bash 4 or later
 export PATH="$HOME/.local/bin:$PWD/system/bin:$PATH"
 if [ -f .env ]; then
   while IFS= read -r l || [ -n "$l" ]; do l=${l%$'\r'}

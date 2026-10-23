@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Athanor (WSL2 / Linux, no Docker): autonomous work loop
+#  Athanor (WSL2 / Linux / macOS, no Docker): autonomous work loop
 #  Claude runs directly on the machine, inside the system sandbox
 #  (Claude Code's sandbox): it only writes to the project folder and tools/.
 #
@@ -60,6 +60,8 @@ if [ "$NATIF" = 1 ]; then
   # Claude Code's Bash tool and hooks: this very Git Bash
   [ -n "${CLAUDE_CODE_GIT_BASH_PATH:-}" ] || export CLAUDE_CODE_GIT_BASH_PATH="$(cygpath -w /usr/bin/bash.exe 2>/dev/null)"
 fi
+# macOS: the shims of system/mac are the pilot's too (Claude's pkill kills by name); the GNU tools stay
+[ "$MAC" = 1 ] && CHEMIN_CLAUDE=$(printf '%s' "$CHEMIN_CLAUDE" | tr ':' '\n' | grep -vxF "$SYSTEME/mac" | paste -sd: -)
 mkdir -p "$ETAT/logs" "$TOOLS/bin" "$TOOLS/cache"
 [ -n "${TZ:-}" ] && export TZ
 
@@ -211,7 +213,8 @@ terminer() {
 }
 
 connexion_presente() {
-  [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -f "$CONFIG_CLAUDE/.credentials.json" ]
+  [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -f "$CONFIG_CLAUDE/.credentials.json" ] \
+    || { [ "$MAC" = 1 ] && security find-generic-password -s "Claude Code-credentials" >/dev/null 2>&1; }   # macOS: in the keychain
 }
 
 synchroniser_demande() {  # flags a change of .athanor/REQUEST.md (Claude re-reads it and adapts the plan)
@@ -673,6 +676,15 @@ echo $$ | publier "$ETAT/pilot.pid"
 # dead if the file is older than 90 s (WSL or the PC shut down before the pilot could exit).
 ( while kill -0 $$ 2>/dev/null && [ -f "$PRIVE/pilot.pid" ]; do echo $$ | publier "$ETAT/pilot.pid"; sleep 20; done ) 9>&- &
 BATTEMENT_PID=$!
+# macOS: the Mac does not go to sleep while the pilot runs (a sleeping Mac would cut the cycle and stop
+# the pilot for hours); the screen still turns off. caffeinate ends with the pilot (-w).
+[ "$MAC" = 1 ] && command -v caffeinate >/dev/null 2>&1 && { caffeinate -i -s -w $$ 9>&- & }
+# macOS: the session variables the mac-var gateway set (the Mac forgets them at each restart)
+if [ "$MAC" = 1 ] && [ -f "$KIT/logs/mac-vars.env" ]; then
+  while IFS='=' read -r n v; do
+    [[ "$n" =~ ^(ANDROID_HOME|ANDROID_SDK_ROOT|ANDROID_NDK_ROOT|NDKROOT|NDK_ROOT|JAVA_HOME)$ ]] && [ -d "$v" ] && launchctl setenv "$n" "$v" 2>/dev/null
+  done < "$KIT/logs/mac-vars.env"
+fi
 arreter_tout() {  # Ctrl+C, window closed or stop.sh: Claude is stopped too
   local sid f; sid=$(pid_sur "$(cat "$PRIVE/claude_sid" 2>/dev/null)")
   [ -n "$sid" ] && pkill -TERM -s "$sid" 2>/dev/null
@@ -717,6 +729,8 @@ cp -f "$KIT/template/CLAUDE.md" "$CONSIGNES"
 [ "${SUBAGENT_MODEL,,}" = auto ] && cat "$KIT/template/guides/SUBAGENT_MODELS.md" >> "$CONSIGNES" 2>/dev/null
 # native Windows mode: what changes for Claude (Git Bash, Windows programs, no sandbox)
 [ "$NATIF" = 1 ] && cat "$KIT/template/guides/NATIVE.md" >> "$CONSIGNES" 2>/dev/null
+# macOS: what changes for Claude (the Mac, its sandbox, Homebrew, Mac apps, the deliverable's platform)
+[ "$MAC" = 1 ] && cat "$KIT/template/guides/MAC.md" >> "$CONSIGNES" 2>/dev/null
 # The language also goes at the end of each cycle's goal: the goal is written in English, and Claude
 # answers in the language of the message it receives unless told otherwise.
 case "${LANGUAGE:-en}" in
@@ -850,7 +864,8 @@ arreter_ecran() {
 }
 preparer_ecran() {
   # native Windows: no Linux windows (Claude's desktop, on the Windows side, keeps its programs away)
-  if [ "$NATIF" = 1 ] || [ ! -f "$KIT/logs/bureau-isole" ] || [ -n "${ECRAN_IMPOSSIBLE:-}" ]; then arreter_ecran; return; fi
+  # macOS: no X server for Mac windows; the gateways open the Mac apps hidden instead (system/bin/_common.sh)
+  if [ "$NATIF" = 1 ] || [ "$MAC" = 1 ] || [ ! -f "$KIT/logs/bureau-isole" ] || [ -n "${ECRAN_IMPOSSIBLE:-}" ]; then arreter_ecran; return; fi
   if ! command -v Xvfb > /dev/null 2>&1 || ! command -v bwrap > /dev/null 2>&1; then
     [ -z "$ECRAN_SIGNALE" ] && log "Claude's screen: Xvfb is missing (Setup & health -> Install everything): Linux windows open on your screen."
     ECRAN_SIGNALE=1; arreter_ecran; return

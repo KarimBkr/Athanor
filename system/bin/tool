@@ -3,7 +3,7 @@
 # Examples: tool python:3.12 python script.py     tool node:22 npm run build
 . "$(dirname "$0")/_common.sh"
 passer_par_le_pont "$@"
-command -v docker >/dev/null 2>&1 || { echo "Docker not found: start Docker Desktop (WSL integration enabled)." >&2; exit 127; }
+command -v docker >/dev/null 2>&1 || { echo "Docker not found: start Docker Desktop$([ "$MAC" = 1 ] || echo " (WSL integration enabled)")." >&2; exit 127; }
 image="${1:-}"; shift || true
 if [ -z "$image" ] || [[ "$image" == -* ]] || [ $# -eq 0 ]; then
   echo "Usage: tool IMAGE COMMAND...   (no Docker options: the container only sees the project)" >&2; exit 2

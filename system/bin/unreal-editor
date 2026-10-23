@@ -4,12 +4,13 @@
 . "$(dirname "$0")/_common.sh"
 passer_par_le_pont "$@"
 exe="${UE_DIR:-}/Engine/Binaries/Win64/UnrealEditor.exe"
-[ -f "$exe" ] || absent "Unreal Engine"
+[ "$MAC" = 1 ] && exe="${UE_DIR:-}/Engine/Binaries/Mac/UnrealEditor.app"
+[ -e "$exe" ] || absent "Unreal Engine"
 attendre=0; [ "${1:-}" = "--wait-mcp" ] && { attendre=1; shift; }
 convertir_args "$@"
 # Starts the editor's MCP server without manual setup (Unreal MCP plugin enabled in the .uproject).
 [ "$attendre" = 1 ] && ARGS+=("-ExecCmds=ModelContextProtocol.StartServer")
-lancer_windows --detache "$exe" "${ARGS[@]}"
+if [ "$MAC" = 1 ]; then lancer_mac "$exe" "${ARGS[@]}"; else lancer_windows --detache "$exe" "${ARGS[@]}"; fi
 if [ "$attendre" = 1 ]; then
   url="${UNREAL_MCP_URL:-http://127.0.0.1:8000/mcp}"
   for i in $(seq 1 60); do

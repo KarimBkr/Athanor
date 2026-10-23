@@ -670,6 +670,10 @@ func dossiersSysteme() []string {
 		return []string{os.Getenv("WINDIR"), os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramData"),
 			os.Getenv("ProgramW6432"), os.Getenv("LocalAppData") + `\Programs`}
 	}
+	if runtime.GOOS == "darwin" {
+		return []string{"/System", "/Library", "/Applications", "/usr", "/bin", "/sbin", "/etc", "/private/etc", "/var/db", "/private/var/db",
+			"/var/root", "/private/var/root", "/dev", "/opt/homebrew"}
+	}
 	return []string{"/usr", "/etc", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/boot", "/proc", "/sys", "/dev", "/run", "/var/lib", "/var/log", "/snap", "/root"}
 }
 

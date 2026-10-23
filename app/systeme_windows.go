@@ -883,3 +883,6 @@ func arreterArbre(c *exec.Cmd) {
 		_ = c.Process.Kill()
 	}
 }
+
+// lancerDetache (--lancer): the launcher of the macOS app bundle only.
+func lancerDetache(args []string) int { return 2 }

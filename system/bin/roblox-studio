@@ -31,15 +31,27 @@ elif [ -z "$place" ] && [ -n "$rojo_f" ]; then
   fi
 fi
 if [ "$reconstruire" = 0 ] && studio_ouvert; then echo "Roblox Studio is already open."; exit 0; fi
-# the newest version (Studio updates itself into a new Versions folder)
-exe=$(ls -t "${WIN_PROFIL:-/nulle-part}"/AppData/Local/Roblox/Versions/*/RobloxStudioBeta.exe 2>/dev/null | head -n 1)
-[ -n "$exe" ] && [ -f "$exe" ] || absent "Roblox Studio"
+# the newest version (Studio updates itself into a new Versions folder); macOS: RobloxStudio.app
+if [ "$MAC" = 1 ]; then
+  exe="${ROBLOX_STUDIO:-}"; [ -n "$exe" ] && [ -d "$exe" ] || absent "Roblox Studio"
+else
+  exe=$(ls -t "${WIN_PROFIL:-/nulle-part}"/AppData/Local/Roblox/Versions/*/RobloxStudioBeta.exe 2>/dev/null | head -n 1)
+  [ -n "$exe" ] && [ -f "$exe" ] || absent "Roblox Studio"
+fi
 if [ -n "$place" ]; then
   [ -f "$place" ] || { echo "Place not found: $place" >&2; exit 2; }
   case "${place,,}" in *.rbxl|*.rbxlx) ;; *) echo "Refused: a .rbxl or .rbxlx place only." >&2; exit 2 ;; esac
   reel=$(realpath "$place")
   case "$reel" in "$(realpath "$PROJECT")/"*) ;; *) echo "Refused: the place must be inside the project ($reel)." >&2; exit 2 ;; esac
-  lancer_windows --detache "$exe" --task EditFile --localPlaceFile "$(wslpath -w "$reel")"
+  if [ "$MAC" = 1 ]; then
+    # the place opens as a document of Studio (LaunchServices), in the background, hidden on Claude's desktop
+    o=(-g -n); [ -f "$KIT/logs/bureau-isole" ] && o+=(-j)
+    open "${o[@]}" -a "$exe" "$reel"
+  else
+    lancer_windows --detache "$exe" --task EditFile --localPlaceFile "$(wslpath -w "$reel")"
+  fi
+elif [ "$MAC" = 1 ]; then
+  lancer_mac "$exe"
 else
   lancer_windows --detache "$exe"
 fi

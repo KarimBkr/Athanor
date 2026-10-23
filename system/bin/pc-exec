@@ -1,12 +1,36 @@
 #!/usr/bin/env bash
 # pc-exec [--admin] PROGRAM [ARGUMENTS...]: runs a Windows program (.exe, .msi, .bat, .cmd, .ps1) that you
 # installed as a portable copy in $TOOLS/windows, or that lives in the project. Linux paths are converted.
+# macOS: an app (.app), a program or an installer (.pkg) of $TOOLS/mac or of the project.
 # --admin: run with administrator rights, without any UAC prompt (installers, drivers, services). When a program
 # refuses to start without elevation (Windows error 740), pc-exec retries it elevated automatically.
 . "$(dirname "$0")/_common.sh"
 passer_par_le_pont "$@"
 admin=0; [ "${1:-}" = "--admin" ] && { admin=1; shift; }
 prog="${1:-}"; shift || true
+# macOS: an app (.app), a program (an executable file) or an installer (.pkg, administrator rights through
+# the helper the user allowed once: commands/allow-admin-mac.sh), located in $TOOLS/mac or in the project.
+if [ "$MAC" = 1 ]; then
+  [ -n "$prog" ] && [ -e "$prog" ] || { echo "Usage: pc-exec PATH/App.app|program|installer.pkg [arguments...]" >&2; exit 2; }
+  reel=$(realpath "$prog")
+  case "$reel" in
+    "$KIT/tools/mac/"*|"$PROJECT/"*|"${ANDROID_SDK_DIR:-/nulle-part}/"*|"${ANDROID_JDK_DIR:-/nulle-part}/"*) ;;
+    *) echo "Refused: pc-exec only runs programs located in \$TOOLS/mac or in the project ($reel)." >&2; exit 2 ;;
+  esac
+  case "${reel,,}" in
+    *.pkg)
+      executer_admin pkg "$reel"; code=$?
+      [ $code -eq 127 ] && echo "Administrator rights not allowed yet: the user runs commands/allow-admin-mac.sh once (Setup & health -> Administrator rights). Note it in TODO_FOR_YOU.md and continue with a portable alternative (an app in \$TOOLS/mac)." >&2
+      exit $code ;;
+  esac
+  [ "$admin" = 1 ] && { echo "Refused: on macOS, administrator rights are for installers (.pkg) only." >&2; exit 2; }
+  preparer_mac "$reel"
+  case "$reel" in
+    *.app|*.app/) convertir_args "$@"; lancer_mac --attendre "$reel" "${ARGS[@]}"; exit $? ;;
+  esac
+  [ -f "$reel" ] && [ -x "$reel" ] || { echo "Refused: an app (.app), an installer (.pkg) or an executable file only." >&2; exit 2; }
+  exec "$reel" "$@"
+fi
 [ -n "$prog" ] && [ -f "$prog" ] || { echo "Usage: pc-exec PATH/program.exe [arguments...]" >&2; exit 2; }
 reel=$(realpath "$prog")
 case "$reel" in

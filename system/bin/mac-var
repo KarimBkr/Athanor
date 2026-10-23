@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# mac-var NAME PATH: sets an environment variable of the Mac session for the development tools
+# (ANDROID_HOME, ANDROID_SDK_ROOT, ANDROID_NDK_ROOT, NDKROOT, NDK_ROOT, JAVA_HOME), pointing to a folder of
+# $TOOLS/mac or a detected SDK. The apps started afterwards (the Unreal editor…) see it; the pilot sets it
+# again when it starts (logs/mac-vars.env), the session forgets it at each restart of the Mac.
+. "$(dirname "$0")/_common.sh"
+passer_par_le_pont "$@"
+[ "$MAC" = 1 ] || { echo "mac-var is for macOS (on Windows: windows-var)." >&2; exit 2; }
+nom="${1:-}"; val="${2:-}"
+[[ "$nom" =~ ^(ANDROID_HOME|ANDROID_SDK_ROOT|ANDROID_NDK_ROOT|NDKROOT|NDK_ROOT|JAVA_HOME)$ ]] || { echo "Refused: allowed variables ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_ROOT NDKROOT NDK_ROOT JAVA_HOME" >&2; exit 2; }
+[ -d "$val" ] || { echo "Folder not found: $val" >&2; exit 2; }
+reel=$(realpath "$val")
+case "$reel" in
+  "$KIT/tools/mac/"*|"${ANDROID_SDK_DIR:-/nulle-part}"*|"${ANDROID_JDK_DIR:-/nulle-part}"*) ;;
+  *) echo "Refused: the path must be inside \$TOOLS/mac or a detected SDK ($reel)." >&2; exit 2 ;;
+esac
+launchctl setenv "$nom" "$reel" || exit 1
+f="$KIT/logs/mac-vars.env"; mkdir -p "$KIT/logs"
+{ grep -v "^$nom=" "$f" 2>/dev/null; printf '%s=%s\n' "$nom" "$reel"; } > "$f.tmp" && mv -f "$f.tmp" "$f"
+echo "$nom=$reel (Mac session variable; restart the Unreal editor so it sees it)"

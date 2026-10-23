@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# install-mac FORMULA               installs a command-line program with Homebrew (brew install FORMULA)
+# install-mac --cask CASK           installs a Mac app with Homebrew (brew install --cask CASK)
+# install-mac --search WORDS        searches the Homebrew name of a program (e.g. --search android studio)
+# install-mac --file INSTALLER.pkg  runs a downloaded installer with administrator rights, without a password
+#                                   prompt (allowed once by the user: commands/allow-admin-mac.sh)
+# Every installation is logged in tools/INSTALLS.md (section "On macOS").
+. "$(dirname "$0")/_common.sh"
+passer_par_le_pont "$@"
+[ "$MAC" = 1 ] || { echo "install-mac is for macOS (on Windows: install-windows)." >&2; exit 2; }
+brew=""; for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$b" ] && { brew=$b; break; }; done
+if [ "${1:-}" = "--file" ]; then
+  shift; exec "$(dirname "$0")/pc-exec" "$@"
+fi
+[ -n "$brew" ] || { echo "Homebrew is not installed: the user installs it (https://brew.sh). Note it in TODO_FOR_YOU.md and continue with a portable alternative in \$TOOLS/mac." >&2; exit 127; }
+export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1 NONINTERACTIVE=1
+if [ "${1:-}" = "--search" ]; then
+  shift; mots="$*"
+  [[ "$mots" =~ ^[A-Za-z0-9\ ._+@-]+$ ]] || { echo "Search words: letters, digits, spaces, . _ + @ -" >&2; exit 2; }
+  exec timeout 180 "$brew" search $mots
+fi
+genre=formula; [ "${1:-}" = "--cask" ] && { genre=cask; shift; }
+nom="${1:-}"
+[[ "$nom" =~ ^[A-Za-z0-9][A-Za-z0-9._+@/-]*$ ]] || { echo "Usage: install-mac [--cask] NAME   (to find the name: install-mac --search WORDS)" >&2; exit 2; }
+o=(); [ "$genre" = cask ] && o=(--cask)
+# no terminal: an installer that asks for the password fails at once instead of waiting for nobody
+timeout 1800 "$brew" install "${o[@]}" "$nom" < /dev/null 2>&1; code=$?
+journal="$KIT/tools/INSTALLS.md"
+grep -q '^## On macOS' "$journal" 2>/dev/null || printf '\n## On macOS (Homebrew, logged automatically)\n\n| Date | Software (Homebrew name) | Result | Uninstall |\n|---|---|---|---|\n' >> "$journal"
+if [ $code -eq 0 ]; then res="installed"; else res="failed (code $code)"; fi
+printf '| %s | `%s` | %s | `brew uninstall %s%s` |\n' "$(date '+%Y-%m-%d %H:%M')" "$nom" "$res" "${o[*]:+--cask }" "$nom" >> "$journal"
+if [ $code -ne 0 ]; then
+  echo "FAILED to install $nom. If it asked for the administrator password, look for its .pkg installer (install-mac --file) or a portable version in \$TOOLS/mac; otherwise note it in TODO_FOR_YOU.md (at the project root) and continue with an alternative." >&2
+fi
+exit $code

@@ -1,8 +1,18 @@
-# Guide to the PC's tools (Windows, Unreal, Android)
+# Guide to the PC's tools (Windows, macOS, Unreal, Android)
 
-Read only when the project needs Windows software, Unreal Engine or a mobile platform. The list of software detected on this PC and their commands is in `.athanor/PC_TOOLS.md`.
+Read only when the project needs Windows or Mac software, Unreal Engine or a mobile platform. The list of software detected on this PC and their commands is in `.athanor/PC_TOOLS.md`. On a Mac, read *On macOS* first: it replaces the Windows sections.
 
-## Installing Windows software
+## On macOS
+
+- **Mac software** the project needs and that is missing, in this order:
+  1. **portable**, in `$TOOLS/mac/` (an official `.app` or `.zip`, command-line tools): run it with `pc-exec PATH ...` (an app: `pc-exec $TOOLS/mac/X.app ARGUMENTS...`, which waits until it quits); if a tool needs an environment variable (ANDROID_HOME, JAVA_HOME...), use `mac-var NAME PATH`;
+  2. otherwise with **Homebrew**: `install-mac NAME` (a command-line program), `install-mac --cask NAME` (an app); `install-mac --search WORDS` to find the name. Logged in `$TOOLS/INSTALLS.md` by itself;
+  3. a `.pkg` installer: `install-mac --file X.pkg`, with administrator rights through the helper the user allowed, without a password prompt. If it says administrator rights are "not allowed yet", note it in `TODO_FOR_YOU.md` and continue with a portable alternative;
+  4. if the installation still fails twice: **do not block** (see the last step of *Installing Windows software*).
+- **Gateways**: `unreal-editor`, `unreal-cmd`, `unreal-uat`, `blender`, `roblox-studio`, `adb` and `tool` work as below, with the Mac versions of these programs. A Mac game is built with `unreal-uat BuildCookRun ... -platform=Mac`; iOS (`-platform=IOS`) needs Xcode on the Mac; Android works as below, with the SDK in `$TOOLS/mac/android-sdk` (`sdkmanager`, no `.bat`).
+- Never `open`, `osascript` or `launchctl` (refused by the sandbox): an app starts through `pc-exec` or a gateway.
+
+## Installing Windows software (Windows only)
 
 - **Windows software** (SDKs, engines, editors the project needs and that are missing): you install them yourself, without waiting for anyone, in this order:
   1. **portable**, in `$TOOLS/windows/` (official zip archive, command-line tools): nothing is written anywhere else on the PC; launch them with `pc-exec PATH.exe ...`; if a Windows tool needs an environment variable (ANDROID_HOME, JAVA_HOME...), use `windows-var NAME PATH`;

@@ -48,11 +48,27 @@ func cheminConfig() string {
 	if runtime.GOOS != "windows" {
 		nom = "athanor-config-" + runtime.GOOS + ".json"
 	}
-	exe, err := os.Executable()
+	d, err := dossierExe()
 	if err != nil {
 		return nom
 	}
-	return filepath.Join(filepath.Dir(exe), nom)
+	return filepath.Join(d, nom)
+}
+
+// dossierExe: the executable's folder; on macOS, the folder Athanor.app sits in when the executable is the
+// one inside it (Athanor.app/Contents/MacOS): the bundle is replaced at each update, and writing inside it
+// would break its signature.
+func dossierExe() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	d := filepath.Dir(exe)
+	if runtime.GOOS == "darwin" && filepath.Base(d) == "MacOS" && filepath.Base(filepath.Dir(d)) == "Contents" &&
+		strings.HasSuffix(filepath.Dir(filepath.Dir(d)), ".app") {
+		return filepath.Dir(filepath.Dir(filepath.Dir(d))), nil
+	}
+	return d, nil
 }
 
 func lireConfig() Config {
@@ -112,8 +128,7 @@ func ecrireConfig(c Config) error {
 // devinerKit looks for the tool folder: the executable's folder, its parents, or the current folder.
 func devinerKit() string {
 	var candidats []string
-	if exe, err := os.Executable(); err == nil {
-		d := filepath.Dir(exe)
+	if d, err := dossierExe(); err == nil {
 		candidats = append(candidats, d, filepath.Dir(d), filepath.Dir(filepath.Dir(d)))
 	}
 	if wd, err := os.Getwd(); err == nil {

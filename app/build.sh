@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the application for Windows (from Linux, macOS or WSL) and for the current machine:
-# ../Athanor.exe and ../athanor, in the tool folder. Needs Go 1.24 or later.
+# ../Athanor.exe and ../athanor, in the tool folder (on a Mac also ../Athanor.app). Needs Go 1.24 or later.
 # The Windows icon and version info (winres/athanor.rc) are compiled into rsrc_windows_amd64.syso
 # when a resource compiler is present (llvm-windres or x86_64-w64-mingw32-windres); the committed .syso is used otherwise.
 cd "$(dirname "$0")" || exit 1
@@ -18,3 +18,11 @@ done
 export CGO_ENABLED=0
 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o ../Athanor.exe . && echo "../Athanor.exe ready"
 go build -trimpath -ldflags "-s -w" -o ../athanor . && echo "../athanor (this machine) ready"
+# macOS: Athanor.app at the root of the tool folder too, one program for Apple chips and Intel Macs
+if [ "$(uname -s)" = Darwin ]; then
+  t=$(mktemp -d)
+  GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o "$t/athanor-arm64" . \
+    && GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o "$t/athanor-amd64" . \
+    && bash macres/empaqueter.sh ../Athanor.app "$t/athanor-arm64" "$t/athanor-amd64"
+  rm -rf "$t"
+fi

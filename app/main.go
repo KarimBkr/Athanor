@@ -31,6 +31,10 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--lancer" {
 		os.Exit(lancerDetache(os.Args[2:]))
 	}
+	// Athanor.exe --eveil FILE: keeps the PC awake while a pilot runs (eveil_windows.go).
+	if len(os.Args) > 1 && os.Args[1] == "--eveil" {
+		os.Exit(GarderEveille(os.Args[2:]))
+	}
 	// Athanor.exe --retour PID: brings the user back from Claude's desktop if the application disappears.
 	if len(os.Args) > 1 && os.Args[1] == "--retour" {
 		os.Exit(GardienRetour(os.Args[2:]))
